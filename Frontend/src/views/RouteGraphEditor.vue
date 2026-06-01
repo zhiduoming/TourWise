@@ -35,6 +35,25 @@
             <el-input v-model="newRouteNodeName" placeholder="例如 鸿雁路口" />
           </el-form-item>
 
+          <template v-if="tool === 'add-poi'">
+            <el-form-item label="POI名">
+              <el-input v-model="newPoiForm.name" placeholder="例如 学生服务中心" />
+            </el-form-item>
+            <el-form-item label="类型">
+              <el-select v-model="newPoiForm.categoryCode" style="width: 100%" @change="handlePoiCategoryChange">
+                <el-option
+                  v-for="option in poiCategoryOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="区域">
+              <el-input v-model="newPoiForm.areaName" placeholder="例如 生活服务" />
+            </el-form-item>
+          </template>
+
           <el-form-item v-if="tool === 'connect'" label="路段名">
             <el-input v-model="edgeDescription" placeholder="例如 沿鸿雁路向东" />
           </el-form-item>
@@ -43,8 +62,9 @@
         <div class="hint-list">
           <div><strong>拖动</strong>：移动已有 POI 或路线节点。</div>
           <div><strong>加路口</strong>：点击图上道路，新增隐藏路线节点。</div>
+          <div><strong>加 POI</strong>：点击图上建筑或场所，实时补充用户可选 POI。</div>
           <div><strong>连线</strong>：依次点击两个点，创建双向道路。</div>
-          <div><strong>删除</strong>：点击路线边或隐藏路口删除；业务 POI 不会被删。</div>
+          <div><strong>删除</strong>：点击路线边、隐藏路口或误加 POI 删除。</div>
         </div>
 
         <div class="stats">
@@ -915,6 +935,8 @@ import {
   getAdminRouteGraphVersions,
   getAdminRouteGraphQuality,
   cleanupAdminRouteGraphQuality,
+  createAdminRouteGraphPoi,
+  deleteAdminRouteGraphPoi,
   createAdminRouteGraphVersion,
   getAdminRouteGraphVersionSnapshot,
   diffAdminRouteGraphVersion,
@@ -952,6 +974,12 @@ const newRouteNodeName = ref('')
 const edgeDescription = ref('')
 const routeNodeSeq = ref(1)
 const showRouteLabels = ref(false)
+const newPoiForm = ref({
+  name: '',
+  categoryCode: 'service',
+  areaCode: 'service',
+  areaName: '生活服务'
+})
 const undoStack = ref([])
 const maxUndoSteps = 30
 const importFileRef = ref(null)
@@ -997,9 +1025,25 @@ const mapPixelToMeter = 0.35
 
 const toolOptions = [
   { label: '拖动', value: 'move' },
+  { label: '加 POI', value: 'add-poi' },
   { label: '加路口', value: 'add-route' },
   { label: '连线', value: 'connect' },
   { label: '删除', value: 'delete' }
+]
+
+const poiCategoryOptions = [
+  { label: '校门', value: 'gate', areaCode: 'gate', areaName: '校门' },
+  { label: '教学楼', value: 'teaching', areaCode: 'teaching', areaName: '教学区' },
+  { label: '图书馆', value: 'library', areaCode: 'library', areaName: '教学科研区' },
+  { label: '宿舍', value: 'dormitory', areaCode: 'dormitory', areaName: '宿舍区' },
+  { label: '餐饮', value: 'dining', areaCode: 'dining', areaName: '餐饮区' },
+  { label: '运动', value: 'sports', areaCode: 'sports', areaName: '运动区' },
+  { label: '医疗', value: 'medical', areaCode: 'medical', areaName: '医疗服务' },
+  { label: '办公', value: 'office', areaCode: 'office', areaName: '办公服务' },
+  { label: '购物', value: 'shop', areaCode: 'shopping', areaName: '购物服务' },
+  { label: '景观', value: 'scenic', areaCode: 'landscape', areaName: '景观区' },
+  { label: '交通', value: 'transport', areaCode: 'transport', areaName: '校外交通' },
+  { label: '生活服务', value: 'service', areaCode: 'service', areaName: '生活服务' }
 ]
 
 const mapWidth = computed(() => graphMap.value?.mapWidth || 1000)
@@ -2233,7 +2277,11 @@ const sanitizeFileName = (text) => {
     .slice(0, 48) || 'route-graph'
 }
 
-const handleMapClick = (event) => {
+const handleMapClick = async (event) => {
+  if (tool.value === 'add-poi') {
+    await createPoiAt(event)
+    return
+  }
   if (tool.value !== 'add-route') return
   pushUndoSnapshot()
   clearRouteDebugPreview()
@@ -2253,6 +2301,60 @@ const handleMapClick = (event) => {
     mapY: Math.round(point.y),
     visible: false
   })
+}
+
+const createPoiAt = async (event) => {
+  if (!placeGroupId.value) {
+    ElMessage.warning('请先选择景点')
+    return
+  }
+  const name = newPoiForm.value.name.trim()
+  if (!name) {
+    ElMessage.warning('先填写 POI 名称，再点击地图位置')
+    return
+  }
+  const point = svgPoint(event)
+  const category = poiCategoryOptions.find(item => item.value === newPoiForm.value.categoryCode)
+  const areaCode = category?.areaCode || newPoiForm.value.areaCode || 'service'
+  const areaName = newPoiForm.value.areaName.trim() || category?.areaName || '补充点位'
+  const hadUnsavedChanges = hasUnsavedChanges.value
+  try {
+    const res = await createAdminRouteGraphPoi(placeGroupId.value, {
+      name,
+      categoryCode: newPoiForm.value.categoryCode,
+      areaCode,
+      areaName,
+      mapX: clamp(Math.round(point.x), 0, mapWidth.value),
+      mapY: clamp(Math.round(point.y), 0, mapHeight.value)
+    })
+    const node = res.data
+    if (!node?.id) {
+      ElMessage.error('POI 已提交，但接口没有返回节点信息，请刷新页面确认')
+      return
+    }
+    nodes.value.push({
+      ...node,
+      clientId: node.clientId || `id:${node.id}`,
+      nodeType: 'poi',
+      mapX: Number(node.mapX),
+      mapY: Number(node.mapY)
+    })
+    if (!hadUnsavedChanges) {
+      lastSavedGraphFingerprint.value = graphFingerprint(buildGraphSavePayload())
+    }
+    newPoiForm.value.name = ''
+    clearRouteDebugPreview()
+    ElMessage.success(`已添加 POI：${node.name}`)
+  } catch (error) {
+    console.error('添加 POI 失败:', error)
+  }
+}
+
+const handlePoiCategoryChange = (categoryCode) => {
+  const category = poiCategoryOptions.find(item => item.value === categoryCode)
+  if (!category) return
+  newPoiForm.value.areaCode = category.areaCode
+  newPoiForm.value.areaName = category.areaName
 }
 
 const handleNodeClick = (node) => {
@@ -2303,7 +2405,7 @@ const addEdge = (from, to) => {
 
 const deleteNode = async (node) => {
   if (node.nodeType !== 'route') {
-    ElMessage.warning('业务 POI 不能在这里删除，只能拖动校准位置')
+    await deletePoiNode(node)
     return
   }
   try {
@@ -2316,6 +2418,39 @@ const deleteNode = async (node) => {
     edges.value = edges.value.filter(edge => edge.fromClientId !== node.clientId && edge.toClientId !== node.clientId)
   } catch (error) {
     // user cancelled
+  }
+}
+
+const deletePoiNode = async (node) => {
+  if (!node?.id || !placeGroupId.value) {
+    ElMessage.warning('这个 POI 还没有数据库 ID，刷新页面后再确认')
+    return
+  }
+  try {
+    const hadUnsavedChanges = hasUnsavedChanges.value
+    await ElMessageBox.confirm(
+      `确定删除业务 POI「${node.name}」吗？相关路线边也会一起删除。这个操作会立即写入数据库。`,
+      '删除 POI',
+      {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消'
+      }
+    )
+    await deleteAdminRouteGraphPoi(placeGroupId.value, node.id)
+    clearRouteDebugPreview()
+    nodes.value = nodes.value.filter(item => item.clientId !== node.clientId)
+    edges.value = edges.value.filter(edge => edge.fromClientId !== node.clientId && edge.toClientId !== node.clientId)
+    if (!hadUnsavedChanges) {
+      lastSavedGraphFingerprint.value = graphFingerprint(buildGraphSavePayload())
+    }
+    selectedNode.value = null
+    selectedEdgeKey.value = ''
+    ElMessage.success(`已删除 POI：${node.name}`)
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除 POI 失败:', error)
+    }
   }
 }
 

@@ -78,7 +78,9 @@ public class SearchController {
     }
 
     @GetMapping("/facility/{id}/ai-summary")
-    public ApiResponse<Map<String, String>> getAiSummary(@PathVariable Long id) {
-        return ApiResponse.ok(Map.of("summary", aiSummaryService.getOrGenerate(id)));
+    public ApiResponse<Map<String, String>> getAiSummary(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "false") boolean force) {
+        return ApiResponse.ok(Map.of("summary", aiSummaryService.getOrGenerate(id, force)));
     }
 }

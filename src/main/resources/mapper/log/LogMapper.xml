@@ -21,6 +21,10 @@
         ip.summary AS itineraryPlanSummary,
         l.title,
         l.content,
+        l.content_compressed,
+        l.content_encoding,
+        l.content_original_size,
+        l.content_compressed_size,
         l.rating,
         l.scenery_rating,
         l.facility_rating,
@@ -122,11 +126,13 @@
 
     <insert id="insert" parameterType="com.tourwise.model.LogRecord" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO travel_logs (
-          user_id, poi_id, circle_id, itinerary_plan_id, title, content, rating,
+          user_id, poi_id, circle_id, itinerary_plan_id, title, content,
+          content_compressed, content_encoding, content_original_size, content_compressed_size, rating,
           scenery_rating, facility_rating, service_rating, traffic_rating, value_rating
         )
         VALUES (
-          #{userId}, #{poiId}, #{circleId}, #{itineraryPlanId}, #{title}, #{content}, #{rating},
+          #{userId}, #{poiId}, #{circleId}, #{itineraryPlanId}, #{title}, #{content},
+          #{contentCompressed}, #{contentEncoding}, #{contentOriginalSize}, #{contentCompressedSize}, #{rating},
           #{sceneryRating}, #{facilityRating}, #{serviceRating}, #{trafficRating}, #{valueRating}
         )
     </insert>

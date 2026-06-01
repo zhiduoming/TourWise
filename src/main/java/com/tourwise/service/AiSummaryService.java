@@ -36,14 +36,16 @@ public class AiSummaryService {
         this.searchMapper = searchMapper;
     }
 
-    public String getOrGenerate(Long poiId) {
+    public String getOrGenerate(Long poiId, boolean force) {
         if (!aiProperties.isConfigured()) {
             throw BusinessException.badRequest("AI 功能暂未配置，请联系管理员");
         }
 
-        String cached = searchMapper.findAiSummary(poiId);
-        if (StringUtils.hasText(cached)) {
-            return cached;
+        if (!force) {
+            String cached = searchMapper.findAiSummary(poiId);
+            if (StringUtils.hasText(cached)) {
+                return cached;
+            }
         }
 
         Map<String, Object> raw = searchMapper.findFacilityById(poiId);
@@ -59,8 +61,9 @@ public class AiSummaryService {
 
     private String buildPrompt(Map<String, Object> spot) {
         StringBuilder sb = new StringBuilder();
-        sb.append("你是一位专业的旅游导览助手。请根据以下景点信息，用150字左右生成一段简洁、有吸引力的中文景点简介，");
-        sb.append("突出特色和游玩价值，语气自然亲切，不要逐条列出字段，直接叙述。\n\n");
+        sb.append("你是一位专业的旅游导览助手。请根据以下景点信息，用250到300字生成一段有感染力的中文景点简介，");
+        sb.append("内容包括：景点特色与亮点、游玩体验与氛围、适合人群或推荐理由。");
+        sb.append("语气自然亲切，像导游讲解一样娓娓道来，不要逐条列出字段，不要出现综合评分、热度等数字指标。\n\n");
 
         appendIfPresent(sb, "景点名称", spot, "name");
         appendIfPresent(sb, "所属园区", spot, "placeGroupName");
@@ -87,7 +90,7 @@ public class AiSummaryService {
         try {
             ObjectNode body = objectMapper.createObjectNode();
             body.put("model", aiProperties.getModel());
-            body.put("max_tokens", 300);
+            body.put("max_tokens", 600);
             body.put("temperature", 0.7);
 
             ArrayNode messages = body.putArray("messages");

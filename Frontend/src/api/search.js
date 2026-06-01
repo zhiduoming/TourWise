@@ -41,10 +41,11 @@ export function getHotTop10() {
   })
 }
 
-// 获取景点 AI 简介（第一次调用生成并缓存，后续直接返回）
-export function getSpotAiSummary(id) {
+// 获取景点 AI 简介（第一次调用生成并缓存，后续直接返回；force=true 时重新生成）
+export function getSpotAiSummary(id, force = false) {
   return request({
     url: `/search/facility/${id}/ai-summary`,
-    method: 'get'
+    method: 'get',
+    params: force ? { force: true } : {}
   })
 }

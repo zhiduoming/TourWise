@@ -23,6 +23,10 @@ public interface AdminRouteGraphMapper {
 
     List<RouteGraphNodeRecord> listNodes(@Param("placeGroupId") Long placeGroupId);
 
+    RouteGraphNodeRecord findNodeById(
+            @Param("placeGroupId") Long placeGroupId,
+            @Param("poiId") Long poiId);
+
     List<RouteGraphEdgeRecord> listEdges(@Param("placeGroupId") Long placeGroupId);
 
     int updatePoiCoordinate(
@@ -38,6 +42,18 @@ public interface AdminRouteGraphMapper {
     int deleteRouteNodesByPlaceGroupId(@Param("placeGroupId") Long placeGroupId);
 
     int insertRouteNode(RouteGraphNodeRecord node);
+
+    int insertPoiNode(RouteGraphNodeRecord node);
+
+    int deleteEdgesByPoiId(
+            @Param("placeGroupId") Long placeGroupId,
+            @Param("poiId") Long poiId);
+
+    int softDeletePoiById(
+            @Param("placeGroupId") Long placeGroupId,
+            @Param("poiId") Long poiId);
+
+    int clearRepresentativePoi(@Param("poiId") Long poiId);
 
     int insertEdge(RouteEdge edge);
 

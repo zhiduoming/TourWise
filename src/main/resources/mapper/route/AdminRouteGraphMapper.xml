@@ -33,7 +33,9 @@
           short_name AS placeGroupShortName,
           COALESCE(route_graph_status, 'none') AS routeGraphStatus,
           city,
-          address
+          address,
+          longitude,
+          latitude
         FROM place_groups
         WHERE id = #{placeGroupId}
         LIMIT 1
@@ -63,6 +65,28 @@
         ORDER BY
           CASE WHEN p.area_code = 'route' THEN 2 ELSE 1 END,
           p.id ASC
+    </select>
+
+    <select id="findNodeById" resultType="com.tourwise.model.RouteGraphNodeRecord">
+        SELECT
+          p.id,
+          p.spot_id AS spotId,
+          p.place_group_id AS placeGroupId,
+          p.name,
+          c.code AS categoryCode,
+          c.name AS categoryName,
+          p.area_code AS areaCode,
+          p.area_name AS areaName,
+          p.longitude,
+          p.latitude,
+          p.map_x AS mapX,
+          p.map_y AS mapY
+        FROM pois p
+        JOIN poi_categories c ON c.id = p.category_id
+        WHERE p.place_group_id = #{placeGroupId}
+          AND p.id = #{poiId}
+          AND p.status = 1
+        LIMIT 1
     </select>
 
     <select id="listEdges" resultType="com.tourwise.model.RouteGraphEdgeRecord">
@@ -144,6 +168,63 @@
         FROM place_groups pg
         WHERE pg.id = #{placeGroupId}
     </insert>
+
+    <insert id="insertPoiNode" parameterType="com.tourwise.model.RouteGraphNodeRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO pois
+          (spot_id, poi_role, place_group_id, category_id, name, scene, area_code, area_name,
+           province, city, address, location_text, description, longitude, latitude, map_x, map_y,
+           rating, hotness, visit_count, status)
+        SELECT
+          #{spotId},
+          'internal',
+          #{placeGroupId},
+          #{categoryId},
+          #{name},
+          'campus',
+          #{areaCode},
+          #{areaName},
+          '北京市',
+          pg.city,
+          CONCAT(pg.address, ' ', #{name}),
+          pg.short_name,
+          CONCAT('后台路网标注页补充 POI：', #{name}),
+          #{longitude},
+          #{latitude},
+          #{mapX},
+          #{mapY},
+          4.8,
+          1000,
+          1000,
+          1
+        FROM place_groups pg
+        WHERE pg.id = #{placeGroupId}
+    </insert>
+
+    <delete id="deleteEdgesByPoiId">
+        DELETE e
+        FROM route_edges e
+        JOIN pois fp ON fp.id = e.from_poi_id
+        JOIN pois tp ON tp.id = e.to_poi_id
+        WHERE fp.place_group_id = #{placeGroupId}
+          AND tp.place_group_id = #{placeGroupId}
+          AND (e.from_poi_id = #{poiId} OR e.to_poi_id = #{poiId})
+    </delete>
+
+    <update id="softDeletePoiById">
+        UPDATE pois
+        SET status = 0
+        WHERE id = #{poiId}
+          AND place_group_id = #{placeGroupId}
+          AND status = 1
+          AND COALESCE(area_code, '') != 'route'
+    </update>
+
+    <update id="clearRepresentativePoi">
+        UPDATE spots
+        SET representative_poi_id = NULL
+        WHERE representative_poi_id = #{poiId}
+    </update>
 
     <insert id="insertEdge" parameterType="com.tourwise.model.RouteEdge">
         INSERT INTO route_edges

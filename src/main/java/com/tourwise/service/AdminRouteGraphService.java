@@ -2,6 +2,7 @@ package com.tourwise.service;
 
 import com.tourwise.common.BusinessException;
 import com.tourwise.common.MapUtil;
+import com.tourwise.dto.RouteGraphPoiCreateRequest;
 import com.tourwise.dto.RouteGraphVersionCreateRequest;
 import com.tourwise.dto.RouteGraphEdgeRequest;
 import com.tourwise.dto.RouteGraphNodeRequest;
@@ -289,6 +290,53 @@ public class AdminRouteGraphService {
         return vo;
     }
 
+    @Transactional
+    public RouteGraphNodeVO createPoi(Long placeGroupId, RouteGraphPoiCreateRequest request) {
+        adminService.requireAdmin();
+        validatePlaceGroup(placeGroupId);
+        validatePoiCreateRequest(request);
+
+        Long spotId = routeGraphMapper.findSpotIdByPlaceGroupId(placeGroupId);
+        if (spotId == null) {
+            throw BusinessException.badRequest("当前空间分组未关联景点，无法创建 POI");
+        }
+        Long categoryId = categoryIdOrFallback(request.getCategoryCode());
+
+        RouteGraphNodeRecord record = new RouteGraphNodeRecord();
+        record.setSpotId(spotId);
+        record.setPlaceGroupId(placeGroupId);
+        record.setCategoryId(categoryId);
+        record.setName(request.getName().trim());
+        record.setAreaCode(trimOrDefault(request.getAreaCode(), "service"));
+        record.setAreaName(trimOrDefault(request.getAreaName(), "补充点位"));
+        record.setMapX(request.getMapX());
+        record.setMapY(request.getMapY());
+        record.setLongitude(longitudeOf(placeGroupId, request.getMapX()));
+        record.setLatitude(latitudeOf(placeGroupId, request.getMapY()));
+        routeGraphMapper.insertPoiNode(record);
+
+        RouteGraphNodeRecord saved = routeGraphMapper.findNodeById(placeGroupId, record.getId());
+        if (saved == null) {
+            throw BusinessException.badRequest("POI 创建成功但读取失败，请刷新页面确认");
+        }
+        return RouteGraphNodeVO.from(saved);
+    }
+
+    @Transactional
+    public void deletePoi(Long placeGroupId, Long poiId) {
+        adminService.requireAdmin();
+        validatePlaceGroup(placeGroupId);
+        if (poiId == null || poiId <= 0) {
+            throw BusinessException.badRequest("POI 参数不合法");
+        }
+        routeGraphMapper.deleteEdgesByPoiId(placeGroupId, poiId);
+        routeGraphMapper.clearRepresentativePoi(poiId);
+        int affected = routeGraphMapper.softDeletePoiById(placeGroupId, poiId);
+        if (affected <= 0) {
+            throw BusinessException.notFound("POI 不存在，或该节点不是可删除的业务 POI");
+        }
+    }
+
     public RouteGraphSaveRequest exportGraph(Long placeGroupId) {
         adminService.requireAdmin();
         validatePlaceGroup(placeGroupId);
@@ -364,8 +412,8 @@ public class AdminRouteGraphService {
                         placeGroupId,
                         node.getMapX(),
                         node.getMapY(),
-                        longitudeOf(node.getMapX()),
-                        latitudeOf(node.getMapY()));
+                        longitudeOf(placeGroupId, node.getMapX()),
+                        latitudeOf(placeGroupId, node.getMapY()));
             }
         }
 
@@ -764,9 +812,46 @@ public class AdminRouteGraphService {
         record.setAreaName("路线节点");
         record.setMapX(node.getMapX());
         record.setMapY(node.getMapY());
-        record.setLongitude(longitudeOf(node.getMapX()));
-        record.setLatitude(latitudeOf(node.getMapY()));
+        record.setLongitude(longitudeOf(placeGroupId, node.getMapX()));
+        record.setLatitude(latitudeOf(placeGroupId, node.getMapY()));
         return record;
+    }
+
+    private void validatePoiCreateRequest(RouteGraphPoiCreateRequest request) {
+        if (request == null) {
+            throw BusinessException.badRequest("POI 信息不能为空");
+        }
+        if (!StringUtils.hasText(request.getName())) {
+            throw BusinessException.badRequest("POI 名称不能为空");
+        }
+        if (request.getName().trim().length() > 80) {
+            throw BusinessException.badRequest("POI 名称过长");
+        }
+        if (request.getMapX() == null || request.getMapY() == null) {
+            throw BusinessException.badRequest("POI 缺少平面图坐标");
+        }
+    }
+
+    private Long categoryIdOrFallback(String categoryCode) {
+        Long categoryId = StringUtils.hasText(categoryCode)
+                ? routeGraphMapper.findCategoryIdByCode(categoryCode.trim())
+                : null;
+        if (categoryId != null) {
+            return categoryId;
+        }
+        categoryId = routeGraphMapper.findCategoryIdByCode("service");
+        if (categoryId != null) {
+            return categoryId;
+        }
+        categoryId = routeGraphMapper.findCategoryIdByCode("scenic");
+        if (categoryId != null) {
+            return categoryId;
+        }
+        throw BusinessException.badRequest("缺少可用 POI 分类，无法创建 POI");
+    }
+
+    private String trimOrDefault(String value, String fallback) {
+        return StringUtils.hasText(value) ? value.trim() : fallback;
     }
 
     private void validateNode(RouteGraphNodeRequest node) {
@@ -811,6 +896,30 @@ public class AdminRouteGraphService {
 
     private BigDecimal latitudeOf(Integer mapY) {
         return BASE_LATITUDE.subtract(BigDecimal.valueOf(mapY - 990L).multiply(LATITUDE_PER_PIXEL))
+                .setScale(6, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal longitudeOf(Long placeGroupId, Integer mapX) {
+        Map<String, Object> summary = routeGraphMapper.findPlaceGroupSummary(placeGroupId);
+        Map<String, Object> raw = summary == null ? null : MapUtil.normalize(summary);
+        BigDecimal center = raw == null ? null : VoConvert.decimal(raw, "longitude");
+        RouteMapVO map = RouteMapVO.from(routeMapMapper.findByPlaceGroupId(placeGroupId));
+        if (center == null || map == null || map.getMapWidth() == null) {
+            return longitudeOf(mapX);
+        }
+        return center.add(BigDecimal.valueOf(mapX - map.getMapWidth() / 2.0).multiply(LONGITUDE_PER_PIXEL))
+                .setScale(6, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal latitudeOf(Long placeGroupId, Integer mapY) {
+        Map<String, Object> summary = routeGraphMapper.findPlaceGroupSummary(placeGroupId);
+        Map<String, Object> raw = summary == null ? null : MapUtil.normalize(summary);
+        BigDecimal center = raw == null ? null : VoConvert.decimal(raw, "latitude");
+        RouteMapVO map = RouteMapVO.from(routeMapMapper.findByPlaceGroupId(placeGroupId));
+        if (center == null || map == null || map.getMapHeight() == null) {
+            return latitudeOf(mapY);
+        }
+        return center.subtract(BigDecimal.valueOf(mapY - map.getMapHeight() / 2.0).multiply(LATITUDE_PER_PIXEL))
                 .setScale(6, RoundingMode.HALF_UP);
     }
 }

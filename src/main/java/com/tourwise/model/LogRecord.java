@@ -17,6 +17,10 @@ public class LogRecord {
     private Long itineraryPlanId;
     private String title;
     private String content;
+    private byte[] contentCompressed;
+    private String contentEncoding;
+    private Integer contentOriginalSize;
+    private Integer contentCompressedSize;
     private BigDecimal rating;
     private BigDecimal sceneryRating;
     private BigDecimal facilityRating;

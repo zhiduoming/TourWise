@@ -1,6 +1,7 @@
 package com.tourwise.controller;
 
 import com.tourwise.common.ApiResponse;
+import com.tourwise.dto.RouteGraphPoiCreateRequest;
 import com.tourwise.dto.RouteGraphSaveRequest;
 import com.tourwise.dto.RouteGraphSaveWithVersionRequest;
 import com.tourwise.dto.RouteGraphVersionCreateRequest;
@@ -8,8 +9,10 @@ import com.tourwise.service.AdminRouteGraphService;
 import com.tourwise.vo.route.RouteGraphCleanupVO;
 import com.tourwise.vo.route.RouteGraphDiffVO;
 import com.tourwise.vo.route.RouteGraphInspectionVO;
+import com.tourwise.vo.route.RouteGraphNodeVO;
 import com.tourwise.vo.route.RouteGraphVO;
 import com.tourwise.vo.route.RouteGraphVersionVO;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -52,6 +55,21 @@ public class AdminRouteGraphController {
     @PostMapping("/{placeGroupId}/quality/cleanup")
     public ApiResponse<RouteGraphCleanupVO> cleanupQualityIssues(@PathVariable Long placeGroupId) {
         return ApiResponse.ok(routeGraphService.cleanupQualityIssues(placeGroupId));
+    }
+
+    @PostMapping("/{placeGroupId}/pois")
+    public ApiResponse<RouteGraphNodeVO> createPoi(
+            @PathVariable Long placeGroupId,
+            @RequestBody RouteGraphPoiCreateRequest request) {
+        return ApiResponse.ok(routeGraphService.createPoi(placeGroupId, request));
+    }
+
+    @DeleteMapping("/{placeGroupId}/pois/{poiId}")
+    public ApiResponse<Void> deletePoi(
+            @PathVariable Long placeGroupId,
+            @PathVariable Long poiId) {
+        routeGraphService.deletePoi(placeGroupId, poiId);
+        return ApiResponse.ok(null);
     }
 
     @PostMapping("/{placeGroupId}/versions")

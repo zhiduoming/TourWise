@@ -1,6 +1,8 @@
 spring:
   application:
     name: TourWise
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${TOURWISE_DB_HOST:localhost}:${TOURWISE_DB_PORT:3306}/${TOURWISE_DB_NAME:tourist_system}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false

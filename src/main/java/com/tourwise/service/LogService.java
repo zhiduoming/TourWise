@@ -5,6 +5,7 @@ import com.tourwise.mapper.*;
 import com.tourwise.model.*;
 
 import com.tourwise.common.BusinessException;
+import com.tourwise.common.HuffmanCodec;
 import com.tourwise.common.MapUtil;
 import com.tourwise.common.PageResult;
 import com.tourwise.security.AuthContext;
@@ -112,6 +113,7 @@ public class LogService {
         ensureCircleWritable(record.getCircleId(), userId);
         record.setTitle(trimToNull(request.getTitle()));
         record.setContent(request.getContent().trim());
+        applyHuffmanCompression(record);
         record.setSceneryRating(normalizeRating(request.getSceneryRating()));
         record.setFacilityRating(normalizeRating(request.getFacilityRating()));
         record.setServiceRating(normalizeRating(request.getServiceRating()));
@@ -293,6 +295,14 @@ public class LogService {
         return logs;
     }
 
+    private void applyHuffmanCompression(LogRecord record) {
+        HuffmanCodec.CompressedText compressed = HuffmanCodec.compress(record.getContent());
+        record.setContentCompressed(compressed.getPayload());
+        record.setContentEncoding(HuffmanCodec.ENCODING);
+        record.setContentOriginalSize(compressed.getOriginalSize());
+        record.setContentCompressedSize(compressed.getCompressedSize());
+    }
+
     private void insertImages(Long logId, List<String> images) {
         if (images == null || images.isEmpty()) {
             return;
@@ -417,6 +427,10 @@ public class LogService {
         alias(item, "likeCount", "like_count");
         alias(item, "commentCount", "comment_count");
         alias(item, "isLiked", "is_liked");
+        alias(item, "contentCompressed", "content_compressed");
+        alias(item, "contentEncoding", "content_encoding");
+        alias(item, "contentOriginalSize", "content_original_size");
+        alias(item, "contentCompressedSize", "content_compressed_size");
         alias(item, "logId", "log_id");
         alias(item, "parentId", "parent_id");
         alias(item, "sceneryRating", "scenery_rating");
@@ -424,7 +438,21 @@ public class LogService {
         alias(item, "serviceRating", "service_rating");
         alias(item, "trafficRating", "traffic_rating");
         alias(item, "valueRating", "value_rating");
+        decompressContentIfPresent(item);
         return item;
+    }
+
+    private static void decompressContentIfPresent(Map<String, Object> item) {
+        Object encoding = item.get("contentEncoding");
+        Object compressed = item.get("contentCompressed");
+        if (!HuffmanCodec.ENCODING.equals(encoding) || !(compressed instanceof byte[] bytes) || bytes.length == 0) {
+            return;
+        }
+        try {
+            item.put("content", HuffmanCodec.decompress(bytes));
+        } catch (IllegalStateException ex) {
+            // 历史数据或损坏数据兜底使用明文 content，避免列表接口整体失败。
+        }
     }
 
     private static void alias(Map<String, Object> item, String camelKey, String snakeKey) {

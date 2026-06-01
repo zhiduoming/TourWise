@@ -5,9 +5,15 @@
     <el-row :gutter="24" v-loading="loading">
       <!-- 左侧详情 -->
       <el-col :xs="24" :lg="16">
-        <!-- 景点图片 -->
+        <!-- 地图 / 图片降级 -->
         <el-card class="image-card" shadow="hover">
-          <div class="image-admin-shell">
+          <div v-show="amapReady" class="spot-map-wrap">
+            <div ref="mapContainer" class="spot-map" />
+            <button class="map-recenter-btn" @click="recenterMap" title="回到景点位置">
+              <el-icon><Aim /></el-icon>
+            </button>
+          </div>
+          <div v-show="!amapReady" class="image-admin-shell">
             <el-image
               :src="spotDetail.image || '/spot-placeholder.jpg'"
               fit="cover"
@@ -68,7 +74,7 @@
                 v-if="!aiLoading && (aiSummary || aiError)"
                 text
                 size="small"
-                @click="loadAiSummary"
+                @click="loadAiSummary(true)"
               >重新生成</el-button>
             </div>
             <div v-if="aiLoading" class="ai-loading">
@@ -221,6 +227,23 @@
 
       <!-- 右侧信息栏 -->
       <el-col :xs="24" :lg="8">
+        <!-- 景点缩略图（地图模式下显示） -->
+        <el-card v-if="amapReady" class="sidebar-card thumb-card" shadow="hover" style="margin-bottom: 20px">
+          <div class="image-admin-shell">
+            <el-image
+              :src="spotDetail.image || '/spot-placeholder.jpg'"
+              fit="cover"
+              class="spot-thumb"
+            />
+            <AdminImageUpload
+              class="image-upload-overlay"
+              target-type="poi"
+              :target-id="spotDetail.id || route.params.id"
+              @success="handleSpotImageUploaded"
+            />
+          </div>
+        </el-card>
+
         <!-- 快速信息 -->
         <el-card class="sidebar-card" shadow="hover">
           <template #header>
@@ -346,18 +369,20 @@
 </template>
 
 <script setup>
-import { computed, ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import AppHeader from '@/components/AppHeader.vue'
 import AdminImageUpload from '@/components/AdminImageUpload.vue'
 import HeartIcon from '@/components/HeartIcon.vue'
 import { getFacilityDetail, getSpotAiSummary } from '@/api/search'
+import { getAmapConfig } from '@/api/route'
+import AMapLoader from '@amap/amap-jsapi-loader'
 import { createLog, deleteLog, getLogList, toggleLike } from '@/api/log'
 import { getFoodList } from '@/api/food'
 import { getCircleList } from '@/api/circle'
 import { getSpotActionState, recordSpotBrowse, toggleSpotFavorite, toggleSpotWant, toggleSpotVisited } from '@/api/spotAction'
-import { Picture, Location, Odometer, Share, Document, Plus, Star, View, Food, MapLocation, Calendar, StarFilled, Flag, Check } from '@element-plus/icons-vue'
+import { Picture, Location, Odometer, Share, Document, Plus, Star, View, Food, MapLocation, Calendar, StarFilled, Flag, Check, Aim } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const route = useRoute()
@@ -391,6 +416,11 @@ const aiSummary = ref('')
 const aiLoading = ref(false)
 const aiError = ref('')
 const actionLoading = ref('')
+
+const mapContainer = ref(null)
+const amapReady = ref(false)
+const amapConfig = reactive({ enabled: false, jsKey: '', securityCode: '' })
+const amapInstance = ref(null)
 const spotAction = reactive({
   favorite: false,
   wantToGo: false,
@@ -491,13 +521,69 @@ const loadSpotActionState = async () => {
   }
 }
 
-const loadAiSummary = async () => {
+const initSpotMap = async () => {
+  try {
+    const res = await getAmapConfig()
+    Object.assign(amapConfig, res.data || {})
+  } catch {
+    return
+  }
+  if (!amapConfig.enabled || !amapConfig.jsKey) return
+
+  const lng = Number(spotDetail.value.longitude)
+  const lat = Number(spotDetail.value.latitude)
+  if (!lng || !lat) return
+
+  await nextTick()
+  window._AMapSecurityConfig = { securityJsCode: amapConfig.securityCode || '' }
+  const AMap = await AMapLoader.load({
+    key: amapConfig.jsKey,
+    version: '2.0',
+    plugins: ['AMap.Scale', 'AMap.ToolBar']
+  })
+
+  amapReady.value = true
+  await nextTick()
+
+  const map = new AMap.Map(mapContainer.value, {
+    zoom: 16,
+    center: [lng, lat]
+  })
+  amapInstance.value = map
+  map.addControl(new AMap.Scale())
+  map.addControl(new AMap.ToolBar({ position: 'RT' }))
+
+  const marker = new AMap.Marker({
+    position: [lng, lat],
+    title: spotDetail.value.name
+  })
+  marker.setMap(map)
+
+  const infoWindow = new AMap.InfoWindow({
+    content: `<div style="padding:6px 10px;font-size:14px;font-weight:600">${spotDetail.value.name}</div>`,
+    offset: new AMap.Pixel(0, -36)
+  })
+  infoWindow.open(map, marker.getPosition())
+  marker.on('click', () => infoWindow.open(map, marker.getPosition()))
+}
+
+const recenterMap = () => {
+  if (!amapInstance.value) return
+  const lng = Number(spotDetail.value.longitude)
+  const lat = Number(spotDetail.value.latitude)
+  if (lng && lat) {
+    amapInstance.value.setCenter([lng, lat])
+    amapInstance.value.setZoom(16)
+  }
+}
+
+const loadAiSummary = async (force = false) => {
   const id = currentTargetId()
   if (!id) return
   aiLoading.value = true
   aiError.value = ''
   try {
-    const res = await getSpotAiSummary(id)
+    const res = await getSpotAiSummary(id, force)
     aiSummary.value = res.data?.summary || ''
   } catch (e) {
     aiError.value = e?.response?.data?.message || 'AI 简介加载失败'
@@ -731,10 +817,8 @@ const handleRoutePlan = () => {
   router.push({
     path: '/route-plan',
     query: {
-      spotId: spotDetail.value.id || route.params.id,
       placeGroupId: spotDetail.value.placeGroupId,
-      scopeName: spotDetail.value.name,
-      end: `${spotDetail.value.latitude},${spotDetail.value.longitude}`,
+      scopeName: spotDetail.value.placeGroupName || spotDetail.value.name,
       endName: spotDetail.value.name
     }
   })
@@ -823,18 +907,38 @@ const formatDate = (date) => {
   })
 }
 
-onMounted(() => {
-  if (userStore.isLoggedIn && !userStore.userInfo) {
-    userStore.getUserInfoAction().catch(() => userStore.clearLoginState())
+const initPage = () => {
+  diaryPage.value = 1
+  diaryList.value = []
+  aiSummary.value = ''
+  aiError.value = ''
+  if (amapInstance.value) {
+    amapInstance.value.destroy()
+    amapInstance.value = null
+    amapReady.value = false
   }
   loadSpotDetail().then(async () => {
     await Promise.all([loadNearbyFoods(), loadSpotActionState()])
     recordCurrentSpotBrowse()
     loadAiSummary()
+    initSpotMap()
   })
   loadSpotDiaries()
   if (userStore.isLoggedIn) {
     loadJoinedCircles()
+  }
+}
+
+onMounted(() => {
+  if (userStore.isLoggedIn && !userStore.userInfo) {
+    userStore.getUserInfoAction().catch(() => userStore.clearLoginState())
+  }
+  initPage()
+})
+
+watch(() => route.params.id, (newId, oldId) => {
+  if (newId && newId !== oldId) {
+    initPage()
   }
 })
 </script>
@@ -859,9 +963,53 @@ onMounted(() => {
   position: relative;
 }
 
+.spot-map-wrap {
+  position: relative;
+  width: 100%;
+  height: 500px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.spot-map {
+  width: 100%;
+  height: 100%;
+}
+
+.map-recenter-btn {
+  position: absolute;
+  bottom: 60px;
+  right: 12px;
+  z-index: 100;
+  width: 36px;
+  height: 36px;
+  background: #fff;
+  border: none;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #333;
+  transition: background 0.2s;
+
+  &:hover {
+    background: #f0f7ff;
+    color: #409eff;
+  }
+}
+
 .spot-image {
   width: 100%;
   height: 500px;
+  border-radius: 8px;
+}
+
+.spot-thumb {
+  width: 100%;
+  height: 160px;
   border-radius: 8px;
 }
 

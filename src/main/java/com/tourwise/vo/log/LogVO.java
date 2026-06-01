@@ -31,6 +31,10 @@ public class LogVO {
     private String itineraryPlanSummary;
     private String title;
     private String content;
+    private String contentEncoding;
+    private Integer contentOriginalSize;
+    private Integer contentCompressedSize;
+    private BigDecimal compressionRatio;
     private BigDecimal rating;
     private BigDecimal sceneryRating;
     private BigDecimal facilityRating;
@@ -64,6 +68,10 @@ public class LogVO {
         vo.setItineraryPlanSummary(VoConvert.string(row, "itineraryPlanSummary"));
         vo.setTitle(VoConvert.string(row, "title"));
         vo.setContent(VoConvert.string(row, "content"));
+        vo.setContentEncoding(firstString(row, "contentEncoding", "content_encoding"));
+        vo.setContentOriginalSize(firstInt(row, "contentOriginalSize", "content_original_size"));
+        vo.setContentCompressedSize(firstInt(row, "contentCompressedSize", "content_compressed_size"));
+        vo.setCompressionRatio(compressionRatio(vo.getContentOriginalSize(), vo.getContentCompressedSize()));
         vo.setRating(VoConvert.decimal(row, "rating"));
         vo.setSceneryRating(firstDecimal(row, "sceneryRating", "scenery_rating"));
         vo.setFacilityRating(firstDecimal(row, "facilityRating", "facility_rating"));
@@ -100,6 +108,26 @@ public class LogVO {
     @JsonProperty("itinerary_plan_id")
     public Long getItineraryPlanIdAlias() {
         return itineraryPlanId;
+    }
+
+    @JsonProperty("content_encoding")
+    public String getContentEncodingAlias() {
+        return contentEncoding;
+    }
+
+    @JsonProperty("content_original_size")
+    public Integer getContentOriginalSizeAlias() {
+        return contentOriginalSize;
+    }
+
+    @JsonProperty("content_compressed_size")
+    public Integer getContentCompressedSizeAlias() {
+        return contentCompressedSize;
+    }
+
+    @JsonProperty("compression_ratio")
+    public BigDecimal getCompressionRatioAlias() {
+        return compressionRatio;
     }
 
     @JsonProperty("view_count")
@@ -175,6 +203,14 @@ public class LogVO {
     private static String firstString(Map<String, Object> row, String first, String second) {
         String firstValue = VoConvert.string(row, first);
         return firstValue != null ? firstValue : VoConvert.string(row, second);
+    }
+
+    private static BigDecimal compressionRatio(Integer originalSize, Integer compressedSize) {
+        if (originalSize == null || compressedSize == null || originalSize <= 0) {
+            return null;
+        }
+        return BigDecimal.valueOf(compressedSize)
+                .divide(BigDecimal.valueOf(originalSize), 2, java.math.RoundingMode.HALF_UP);
     }
 
     @SuppressWarnings("unchecked")

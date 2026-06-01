@@ -191,6 +191,23 @@ export function cleanupAdminRouteGraphQuality(placeGroupId) {
   })
 }
 
+// 管理员在路网标注页补充业务 POI
+export function createAdminRouteGraphPoi(placeGroupId, data) {
+  return request({
+    url: `/admin/route-graphs/${placeGroupId}/pois`,
+    method: 'post',
+    data
+  })
+}
+
+// 管理员在路网标注页删除误加业务 POI
+export function deleteAdminRouteGraphPoi(placeGroupId, poiId) {
+  return request({
+    url: `/admin/route-graphs/${placeGroupId}/pois/${poiId}`,
+    method: 'delete'
+  })
+}
+
 // 管理员创建路网版本快照
 export function createAdminRouteGraphVersion(placeGroupId, data) {
   return request({
