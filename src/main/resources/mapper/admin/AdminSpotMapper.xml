@@ -1,0 +1,503 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.AdminSpotMapper">
+
+    <sql id="SpotColumns">
+        s.id,
+        s.legacy_place_group_id AS placeGroupId,
+        s.representative_poi_id AS representativePoiId,
+        s.category_id AS categoryId,
+        c.name AS categoryName,
+        s.name,
+        s.short_name AS shortName,
+        s.spot_type AS spotType,
+        s.province,
+        s.city,
+        s.district,
+        s.address,
+        s.description,
+        s.cover_image AS coverImage,
+        s.longitude,
+        s.latitude,
+        s.location_radius_m AS locationRadiusM,
+        s.rating,
+        s.hotness,
+        s.visit_count AS visitCount,
+        s.status,
+        pg.name AS placeGroupName,
+        COALESCE(pg.route_graph_status, 'none') AS routeGraphStatus,
+        COUNT(DISTINCT p.id) AS poiCount,
+        COUNT(DISTINCT str.tag_id) AS tagCount
+    </sql>
+
+    <sql id="SpotFilter">
+        WHERE 1 = 1
+        <if test="keyword != null">
+            AND (
+              s.name LIKE CONCAT('%', #{keyword}, '%')
+              OR s.short_name LIKE CONCAT('%', #{keyword}, '%')
+              OR s.province LIKE CONCAT('%', #{keyword}, '%')
+              OR s.city LIKE CONCAT('%', #{keyword}, '%')
+              OR s.address LIKE CONCAT('%', #{keyword}, '%')
+              OR pg.name LIKE CONCAT('%', #{keyword}, '%')
+            )
+        </if>
+        <if test="status != null">
+            AND s.status = #{status}
+        </if>
+        <if test="routeGraphStatus != null">
+            AND COALESCE(pg.route_graph_status, 'none') = #{routeGraphStatus}
+        </if>
+        <if test="qualityIssue != null">
+            <choose>
+                <when test="qualityIssue == 'missingCategory'">
+                    AND s.category_id IS NULL
+                </when>
+                <when test="qualityIssue == 'missingCover'">
+                    AND (s.cover_image IS NULL OR s.cover_image = '')
+                </when>
+                <when test="qualityIssue == 'missingGeo'">
+                    AND (s.longitude IS NULL OR s.latitude IS NULL)
+                </when>
+                <when test="qualityIssue == 'missingShortName'">
+                    AND (s.short_name IS NULL OR s.short_name = '')
+                </when>
+                <when test="qualityIssue == 'missingDescription'">
+                    AND (s.description IS NULL OR s.description = '')
+                </when>
+                <when test="qualityIssue == 'missingAddress'">
+                    AND (s.address IS NULL OR s.address = '')
+                </when>
+                <when test="qualityIssue == 'missingTags'">
+                    AND NOT EXISTS (
+                      SELECT 1
+                      FROM spot_tag_relations str
+                      WHERE str.spot_id = s.id
+                    )
+                </when>
+                <when test="qualityIssue == 'missingRepresentativePoi'">
+                    AND (
+                      s.representative_poi_id IS NULL
+                      OR NOT EXISTS (
+                        SELECT 1
+                        FROM pois rp
+                        WHERE rp.id = s.representative_poi_id
+                      )
+                    )
+                </when>
+                <when test="qualityIssue == 'representativePoiDisabled'">
+                    AND EXISTS (
+                      SELECT 1
+                      FROM pois rp
+                      WHERE rp.id = s.representative_poi_id
+                        AND rp.status != 1
+                    )
+                </when>
+                <when test="qualityIssue == 'missingVisiblePoi'">
+                    AND NOT EXISTS (
+                      SELECT 1
+                      FROM pois vp
+                      WHERE vp.spot_id = s.id
+                        AND vp.status = 1
+                        AND COALESCE(vp.area_code, '') NOT IN ('route', 'campus_summary', 'spot_summary')
+                    )
+                </when>
+                <when test="qualityIssue == 'campusRouteMissing'">
+                    AND s.spot_type IN ('campus', 'university')
+                    AND COALESCE(pg.route_graph_status, 'none') = 'none'
+                </when>
+            </choose>
+        </if>
+    </sql>
+
+    <select id="listSpots" resultType="java.util.Map">
+        SELECT
+        <include refid="SpotColumns"/>
+        FROM spots s
+        LEFT JOIN place_groups pg ON pg.id = s.legacy_place_group_id
+        LEFT JOIN poi_categories c ON c.id = s.category_id
+        LEFT JOIN pois p ON p.spot_id = s.id
+          AND p.status = 1
+          AND COALESCE(p.area_code, '') != 'route'
+          AND COALESCE(p.area_code, '') != 'campus_summary'
+        LEFT JOIN spot_tag_relations str ON str.spot_id = s.id
+        <include refid="SpotFilter"/>
+        GROUP BY s.id, s.legacy_place_group_id, s.representative_poi_id, s.category_id, c.name, s.name, s.short_name,
+                 s.spot_type, s.province, s.city, s.district, s.address, s.description,
+                 s.cover_image, s.longitude, s.latitude, s.location_radius_m, s.rating,
+                 s.hotness, s.visit_count, s.status, pg.name, pg.route_graph_status
+        ORDER BY
+          CASE
+            WHEN s.legacy_place_group_id = 3 THEN 1
+            WHEN s.legacy_place_group_id = 4 THEN 2
+            WHEN s.legacy_place_group_id = 5 THEN 3
+            WHEN s.legacy_place_group_id = 6 THEN 4
+            ELSE 20
+          END,
+          s.hotness DESC,
+          s.id ASC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countSpots" resultType="long">
+        SELECT COUNT(*)
+        FROM spots s
+        LEFT JOIN place_groups pg ON pg.id = s.legacy_place_group_id
+        <include refid="SpotFilter"/>
+    </select>
+
+    <select id="findSpotById" resultType="java.util.Map">
+        SELECT
+        <include refid="SpotColumns"/>
+        FROM spots s
+        LEFT JOIN place_groups pg ON pg.id = s.legacy_place_group_id
+        LEFT JOIN poi_categories c ON c.id = s.category_id
+        LEFT JOIN pois p ON p.spot_id = s.id
+          AND p.status = 1
+          AND COALESCE(p.area_code, '') != 'route'
+          AND COALESCE(p.area_code, '') != 'campus_summary'
+        LEFT JOIN spot_tag_relations str ON str.spot_id = s.id
+        WHERE s.id = #{id}
+        GROUP BY s.id, s.legacy_place_group_id, s.representative_poi_id, s.category_id, c.name, s.name, s.short_name,
+                 s.spot_type, s.province, s.city, s.district, s.address, s.description,
+                 s.cover_image, s.longitude, s.latitude, s.location_radius_m, s.rating,
+                 s.hotness, s.visit_count, s.status, pg.name, pg.route_graph_status
+    </select>
+
+    <select id="findCategoryIdByCode" resultType="long">
+        SELECT id
+        FROM poi_categories
+        WHERE code = #{code}
+        LIMIT 1
+    </select>
+
+    <insert id="insertPlaceGroup" useGeneratedKeys="true" keyProperty="request.placeGroupId">
+        INSERT INTO place_groups
+          (name, short_name, group_type, city, district, address, longitude, latitude, description, route_graph_status)
+        VALUES
+          (#{request.name}, #{request.shortName}, #{groupType}, #{request.city}, #{request.district},
+           #{request.address}, #{request.longitude}, #{request.latitude}, #{request.description},
+           #{request.routeGraphStatus})
+    </insert>
+
+    <insert id="insertSpot" useGeneratedKeys="true" keyProperty="request.id">
+        INSERT INTO spots
+          (legacy_place_group_id, category_id, name, short_name, spot_type, province, city, district,
+           address, description, cover_image, longitude, latitude, location_radius_m, rating, hotness,
+           visit_count, status)
+        VALUES
+          (#{request.placeGroupId}, #{request.categoryId}, #{request.name}, #{request.shortName},
+           #{request.spotType}, #{request.province}, #{request.city}, #{request.district},
+           #{request.address}, #{request.description}, #{request.coverImage}, #{request.longitude},
+           #{request.latitude}, #{request.locationRadiusM}, #{request.rating}, #{request.hotness},
+           0, #{request.status})
+    </insert>
+
+    <insert id="insertRepresentativePoi" useGeneratedKeys="true" keyProperty="request.representativePoiId">
+        INSERT INTO pois
+          (spot_id, poi_role, place_group_id, category_id, name, scene, area_code, area_name,
+           province, city, address, location_text, description, image_url, longitude, latitude,
+           rating, hotness, visit_count, status)
+        VALUES
+          (#{spotId}, 'spot_summary', #{placeGroupId}, #{request.categoryId}, #{request.name},
+           #{scene}, #{areaCode}, #{areaName}, #{request.province}, #{request.city}, #{request.address},
+           #{areaName}, #{request.description}, #{request.coverImage}, #{request.longitude},
+           #{request.latitude}, #{request.rating}, #{request.hotness}, 0, #{request.status})
+    </insert>
+
+    <update id="updateSpotRepresentativePoi">
+        UPDATE spots
+        SET representative_poi_id = #{representativePoiId}
+        WHERE id = #{spotId}
+    </update>
+
+    <update id="updateSpot">
+        UPDATE spots
+        SET
+          category_id = #{request.categoryId},
+          name = #{request.name},
+          short_name = #{request.shortName},
+          spot_type = #{request.spotType},
+          province = #{request.province},
+          city = #{request.city},
+          district = #{request.district},
+          address = #{request.address},
+          description = #{request.description},
+          cover_image = #{request.coverImage},
+          longitude = #{request.longitude},
+          latitude = #{request.latitude},
+          location_radius_m = #{request.locationRadiusM},
+          rating = #{request.rating},
+          hotness = #{request.hotness},
+          status = #{request.status}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateSpotStatus">
+        UPDATE spots
+        SET status = #{status}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updatePlaceGroupFromSpot">
+        UPDATE place_groups
+        SET
+          name = #{request.name},
+          short_name = #{request.shortName},
+          city = #{request.city},
+          district = #{request.district},
+          address = #{request.address},
+          longitude = #{request.longitude},
+          latitude = #{request.latitude},
+          route_graph_status = #{request.routeGraphStatus}
+        WHERE id = #{placeGroupId}
+    </update>
+
+    <update id="updateRepresentativePoiFromSpot">
+        UPDATE pois
+        SET
+          category_id = #{request.categoryId},
+          name = #{request.name},
+          scene = #{scene},
+          area_code = #{areaCode},
+          area_name = #{areaName},
+          province = #{request.province},
+          city = #{request.city},
+          address = #{request.address},
+          location_text = #{areaName},
+          description = #{request.description},
+          image_url = #{request.coverImage},
+          longitude = #{request.longitude},
+          latitude = #{request.latitude},
+          rating = #{request.rating},
+          hotness = #{request.hotness},
+          status = #{request.status}
+        WHERE id = #{poiId}
+          AND (
+            poi_role IN ('spot_summary', 'spot_legacy')
+            OR area_code IN ('spot_summary', 'campus_summary')
+          )
+    </update>
+
+    <update id="updateRepresentativePoiStatus">
+        UPDATE pois
+        SET status = #{status}
+        WHERE id = #{poiId}
+          AND (
+            poi_role IN ('spot_summary', 'spot_legacy')
+            OR area_code IN ('spot_summary', 'campus_summary')
+          )
+    </update>
+
+    <sql id="PoiColumns">
+        p.id,
+        p.spot_id AS spotId,
+        p.place_group_id AS placeGroupId,
+        p.category_id AS categoryId,
+        c.code AS categoryCode,
+        c.name AS categoryName,
+        p.name,
+        p.scene,
+        p.area_code AS areaCode,
+        p.area_name AS areaName,
+        p.province,
+        p.city,
+        p.address,
+        p.location_text AS locationText,
+        p.description,
+        p.image_url AS imageUrl,
+        p.longitude,
+        p.latitude,
+        p.map_x AS mapX,
+        p.map_y AS mapY,
+        p.rating,
+        p.hotness,
+        p.visit_count AS visitCount,
+        COALESCE((
+          SELECT COUNT(*)
+          FROM route_edges e
+          WHERE e.from_poi_id = p.id
+             OR e.to_poi_id = p.id
+        ), 0) AS routeEdgeCount,
+        p.status
+    </sql>
+
+    <sql id="PoiFilter">
+        WHERE COALESCE(p.area_code, '') != 'route'
+          AND COALESCE(p.area_code, '') != 'campus_summary'
+          AND COALESCE(p.area_code, '') != 'spot_summary'
+          AND (
+            p.spot_id = #{spotId}
+            <if test="placeGroupId != null">
+                OR p.place_group_id = #{placeGroupId}
+            </if>
+          )
+        <if test="keyword != null">
+            AND (
+              p.name LIKE CONCAT('%', #{keyword}, '%')
+              OR p.area_name LIKE CONCAT('%', #{keyword}, '%')
+              OR p.description LIKE CONCAT('%', #{keyword}, '%')
+              OR p.address LIKE CONCAT('%', #{keyword}, '%')
+            )
+        </if>
+        <if test="status != null">
+            AND p.status = #{status}
+        </if>
+        <if test="qualityIssue != null">
+            <choose>
+                <when test="qualityIssue == 'missingMapPoint'">
+                    AND (p.map_x IS NULL OR p.map_y IS NULL)
+                </when>
+                <when test="qualityIssue == 'missingGeo'">
+                    AND (p.longitude IS NULL OR p.latitude IS NULL)
+                </when>
+                <when test="qualityIssue == 'notConnected'">
+                    AND NOT EXISTS (
+                      SELECT 1
+                      FROM route_edges e
+                      WHERE e.from_poi_id = p.id
+                         OR e.to_poi_id = p.id
+                    )
+                </when>
+                <when test="qualityIssue == 'missingImage'">
+                    AND (p.image_url IS NULL OR p.image_url = '')
+                </when>
+            </choose>
+        </if>
+    </sql>
+
+    <select id="listPois" resultType="java.util.Map">
+        SELECT
+        <include refid="PoiColumns"/>
+        FROM pois p
+        JOIN poi_categories c ON c.id = p.category_id
+        <include refid="PoiFilter"/>
+        ORDER BY p.status DESC, p.area_code ASC, p.id ASC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countPois" resultType="long">
+        SELECT COUNT(*)
+        FROM pois p
+        JOIN poi_categories c ON c.id = p.category_id
+        <include refid="PoiFilter"/>
+    </select>
+
+    <select id="findPoiById" resultType="java.util.Map">
+        SELECT
+        <include refid="PoiColumns"/>
+        FROM pois p
+        JOIN poi_categories c ON c.id = p.category_id
+        WHERE p.id = #{id}
+    </select>
+
+    <insert id="insertPoi" useGeneratedKeys="true" keyProperty="request.id">
+        INSERT INTO pois
+          (spot_id, poi_role, place_group_id, category_id, name, scene, area_code, area_name,
+           province, city, address, location_text, description, image_url, longitude, latitude,
+           map_x, map_y, rating, hotness, visit_count, status)
+        VALUES
+          (#{spotId}, 'internal', #{placeGroupId}, #{request.categoryId}, #{request.name}, #{request.scene},
+           #{request.areaCode}, #{request.areaName}, #{request.province}, #{request.city}, #{request.address},
+           #{request.locationText}, #{request.description}, #{request.imageUrl}, #{request.longitude},
+           #{request.latitude}, #{request.mapX}, #{request.mapY}, #{request.rating}, #{request.hotness}, 0,
+           #{request.status})
+    </insert>
+
+    <update id="updatePoi">
+        UPDATE pois
+        SET
+          category_id = #{request.categoryId},
+          name = #{request.name},
+          scene = #{request.scene},
+          area_code = #{request.areaCode},
+          area_name = #{request.areaName},
+          province = #{request.province},
+          city = #{request.city},
+          address = #{request.address},
+          location_text = #{request.locationText},
+          description = #{request.description},
+          image_url = #{request.imageUrl},
+          longitude = #{request.longitude},
+          latitude = #{request.latitude},
+          map_x = #{request.mapX},
+          map_y = #{request.mapY},
+          rating = #{request.rating},
+          hotness = #{request.hotness},
+          status = #{request.status}
+        WHERE id = #{id}
+          AND COALESCE(area_code, '') != 'route'
+          AND COALESCE(area_code, '') != 'campus_summary'
+    </update>
+
+    <update id="updatePoiStatus">
+        UPDATE pois
+        SET status = #{status}
+        WHERE id = #{id}
+          AND COALESCE(area_code, '') != 'route'
+          AND COALESCE(area_code, '') != 'campus_summary'
+    </update>
+
+    <select id="listCategories" resultType="java.util.Map">
+        SELECT id, code, name, scene
+        FROM poi_categories
+        ORDER BY sort_order ASC, id ASC
+    </select>
+
+    <select id="listTags" resultType="java.util.Map">
+        SELECT
+          id,
+          name,
+          tag_type AS tagType
+        FROM tags
+        <where>
+            <if test="tagType != null">
+                tag_type = #{tagType}
+            </if>
+        </where>
+        ORDER BY
+          CASE tag_type
+            WHEN 'poi' THEN 1
+            WHEN 'interest' THEN 2
+            ELSE 9
+          END,
+          id ASC
+    </select>
+
+    <select id="listSpotTags" resultType="java.util.Map">
+        SELECT
+          t.id,
+          t.name,
+          t.tag_type AS tagType
+        FROM spot_tag_relations str
+        JOIN tags t ON t.id = str.tag_id
+        WHERE str.spot_id = #{spotId}
+        ORDER BY t.id ASC
+    </select>
+
+    <select id="findTagId" resultType="long">
+        SELECT id
+        FROM tags
+        WHERE name = #{name}
+          AND tag_type = #{tagType}
+        LIMIT 1
+    </select>
+
+    <insert id="insertTag">
+        INSERT IGNORE INTO tags (name, tag_type)
+        VALUES (#{name}, #{tagType})
+    </insert>
+
+    <delete id="deleteSpotTags">
+        DELETE FROM spot_tag_relations
+        WHERE spot_id = #{spotId}
+    </delete>
+
+    <insert id="insertSpotTag">
+        INSERT IGNORE INTO spot_tag_relations (spot_id, tag_id)
+        VALUES (#{spotId}, #{tagId})
+    </insert>
+
+</mapper>

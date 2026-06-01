@@ -1,0 +1,14 @@
+USE tourist_system;
+
+CREATE TABLE IF NOT EXISTS files (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '文件ID',
+  original_name VARCHAR(255) DEFAULT NULL COMMENT '原始文件名',
+  stored_name VARCHAR(255) NOT NULL COMMENT '存储文件名',
+  url VARCHAR(255) NOT NULL COMMENT '访问URL',
+  mime_type VARCHAR(100) DEFAULT NULL COMMENT 'MIME类型',
+  size BIGINT DEFAULT NULL COMMENT '文件大小, 字节',
+  upload_by BIGINT DEFAULT NULL COMMENT '上传用户ID',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  KEY idx_files_upload_by (upload_by),
+  CONSTRAINT fk_files_upload_by FOREIGN KEY (upload_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='上传文件表';

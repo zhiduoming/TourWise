@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.NotificationMapper">
+
+    <insert id="insert" parameterType="com.tourwise.model.NotificationRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO notifications
+          (user_id, actor_user_id, type, title, content, target_type, target_id, link_url, is_read)
+        VALUES
+          (#{userId}, #{actorUserId}, #{type}, #{title}, #{content}, #{targetType}, #{targetId}, #{linkUrl}, 0)
+    </insert>
+
+    <select id="list" resultType="java.util.Map">
+        SELECT
+          n.id,
+          n.user_id AS userId,
+          n.actor_user_id AS actorUserId,
+          COALESCE(up.nickname, u.username) AS actorName,
+          up.avatar_url AS actorAvatar,
+          n.type,
+          n.title,
+          n.content,
+          n.target_type AS targetType,
+          n.target_id AS targetId,
+          n.link_url AS linkUrl,
+          n.is_read AS isRead,
+          n.created_at AS createdAt
+        FROM notifications n
+        LEFT JOIN users u
+          ON u.id = n.actor_user_id
+        LEFT JOIN user_profiles up
+          ON up.user_id = n.actor_user_id
+        WHERE n.user_id = #{userId}
+        <if test="onlyUnread != null and onlyUnread">
+          AND n.is_read = 0
+        </if>
+        ORDER BY n.created_at DESC, n.id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*)
+        FROM notifications
+        WHERE user_id = #{userId}
+        <if test="onlyUnread != null and onlyUnread">
+          AND is_read = 0
+        </if>
+    </select>
+
+    <select id="countUnread" resultType="int">
+        SELECT COUNT(*)
+        FROM notifications
+        WHERE user_id = #{userId}
+          AND is_read = 0
+    </select>
+
+    <update id="markRead">
+        UPDATE notifications
+        SET is_read = 1
+        WHERE id = #{id}
+          AND user_id = #{userId}
+    </update>
+
+    <update id="markAllRead">
+        UPDATE notifications
+        SET is_read = 1
+        WHERE user_id = #{userId}
+          AND is_read = 0
+    </update>
+
+</mapper>

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.RouteMapMapper">
+
+    <select id="existsPlaceGroup" resultType="int">
+        SELECT COUNT(*)
+        FROM place_groups
+        WHERE id = #{placeGroupId}
+    </select>
+
+    <select id="findByPlaceGroupId" resultType="com.tourwise.model.RouteMap">
+        SELECT
+          id,
+          place_group_id AS placeGroupId,
+          image_url AS imageUrl,
+          original_name AS originalName,
+          map_width AS mapWidth,
+          map_height AS mapHeight,
+          uploaded_by AS uploadedBy,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM place_group_maps
+        WHERE place_group_id = #{placeGroupId}
+    </select>
+
+    <insert id="upsert" parameterType="com.tourwise.model.RouteMap">
+        INSERT INTO place_group_maps
+          (place_group_id, image_url, original_name, map_width, map_height, uploaded_by)
+        VALUES
+          (#{placeGroupId}, #{imageUrl}, #{originalName}, #{mapWidth}, #{mapHeight}, #{uploadedBy})
+        ON DUPLICATE KEY UPDATE
+          image_url = VALUES(image_url),
+          original_name = VALUES(original_name),
+          map_width = VALUES(map_width),
+          map_height = VALUES(map_height),
+          uploaded_by = VALUES(uploaded_by),
+          updated_at = NOW()
+    </insert>
+
+</mapper>

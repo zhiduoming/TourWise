@@ -1,0 +1,278 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - button "回到主页" [ref=e6] [cursor=pointer]:
+      - generic [ref=e7]:
+        - img [ref=e9]
+        - text: 回到主页
+    - button "登录" [ref=e12] [cursor=pointer]:
+      - generic [ref=e13]: 登录
+  - generic [ref=e14]:
+    - generic [ref=e15]:
+      - generic [ref=e16]: 景点查询 · 推荐 · 路线 · 社区
+      - heading "TourWise 个性化旅游系统" [level=1] [ref=e17]
+      - paragraph [ref=e18]: 面向景区、校区和城市目的地，完成景点检索、智能推荐、路线规划和旅行分享的完整闭环。
+      - generic [ref=e19]:
+        - button "查找景点" [ref=e20] [cursor=pointer]:
+          - generic [ref=e21]:
+            - text: 查找景点
+            - img [ref=e23]
+        - button "智能推荐" [ref=e25] [cursor=pointer]:
+          - generic [ref=e26]: 智能推荐
+      - generic [ref=e27]:
+        - textbox "输入景点、城市或简称，例如 北邮、外滩、故宫" [ref=e30]
+        - button "搜索" [ref=e31] [cursor=pointer]:
+          - generic [ref=e32]: 搜索
+      - generic [ref=e33]:
+        - button "北邮" [ref=e34] [cursor=pointer]
+        - button "北航" [ref=e35] [cursor=pointer]
+        - button "上海外滩" [ref=e36] [cursor=pointer]
+        - button "故宫" [ref=e37] [cursor=pointer]
+    - generic [ref=e38]:
+      - generic [ref=e39]:
+        - generic [ref=e40]: 当前数据概览
+        - img [ref=e42]
+      - generic [ref=e44]:
+        - generic [ref=e45]:
+          - strong [ref=e46]: "10"
+          - generic [ref=e47]: 热门目的地
+        - generic [ref=e48]:
+          - strong [ref=e49]: "4.8"
+          - generic [ref=e50]: 平均评分
+        - generic [ref=e51]:
+          - strong [ref=e52]: 30万
+          - generic [ref=e53]: 累计热度
+      - generic [ref=e55]:
+        - generic [ref=e56]: 今日推荐
+        - strong [ref=e57]: 北京邮电大学西土城校区
+  - generic [ref=e58]:
+    - generic [ref=e59]:
+      - text: Core Modules
+      - heading "核心功能" [level=2] [ref=e60]
+    - paragraph [ref=e61]: 首页只做入口和概览，具体检索、推荐、路线和社区功能进入对应模块完成。
+  - generic [ref=e62]:
+    - generic [ref=e63] [cursor=pointer]:
+      - generic [ref=e64]:
+        - img [ref=e67]
+        - img [ref=e70]
+      - heading "智能推荐" [level=3] [ref=e72]
+      - paragraph [ref=e73]: 综合热度、评分和偏好，推荐适合参观的景点
+      - text: 场景化推荐
+    - generic [ref=e74] [cursor=pointer]:
+      - generic [ref=e75]:
+        - img [ref=e78]
+        - img [ref=e82]
+      - heading "路线规划" [level=3] [ref=e84]
+      - paragraph [ref=e85]: 为景区、校区和场馆生成可解释的游览路线
+      - text: Dijkstra 最短路径
+    - generic [ref=e86] [cursor=pointer]:
+      - generic [ref=e87]:
+        - img [ref=e90]
+        - img [ref=e93]
+      - heading "景点查询" [level=3] [ref=e95]
+      - paragraph [ref=e96]: 按省份、城市、标签和简称筛选目标景点
+      - text: 多条件叠加
+    - generic [ref=e97] [cursor=pointer]:
+      - generic [ref=e98]:
+        - img [ref=e101]
+        - img [ref=e104]
+      - heading "美食推荐" [level=3] [ref=e106]
+      - paragraph [ref=e107]: 发现景点周边、商圈和校园附近的特色美食
+      - text: 按景点关联
+    - generic [ref=e108] [cursor=pointer]:
+      - generic [ref=e109]:
+        - img [ref=e112]
+        - img [ref=e117]
+      - heading "室内导航" [level=3] [ref=e119]
+      - paragraph [ref=e120]: 支持大型场馆和校园楼宇内的路径辅助
+      - text: 扩展模块
+  - generic [ref=e121]:
+    - generic [ref=e122]:
+      - text: Hot List
+      - heading "热门推荐 TOP 10" [level=2] [ref=e123]:
+        - img [ref=e125]
+        - text: 热门推荐 TOP 10
+    - button "查看更多推荐" [ref=e127] [cursor=pointer]:
+      - generic [ref=e128]:
+        - text: 查看更多推荐
+        - img [ref=e130]
+  - generic [ref=e132]:
+    - generic [ref=e133] [cursor=pointer]:
+      - generic [ref=e134]: "1"
+      - img [ref=e137]
+      - generic [ref=e140]:
+        - generic [ref=e141]:
+          - generic:
+            - generic: 北京
+          - generic:
+            - generic: 高校
+        - heading "北京邮电大学西土城校区" [level=4] [ref=e142]
+        - paragraph [ref=e143]: 北邮传统主校区，教学、科研、生活服务和校园景观密集。
+        - generic [ref=e144]:
+          - generic [ref=e145]:
+            - img [ref=e147]
+            - text: "4.9"
+          - generic [ref=e149]:
+            - img [ref=e151]
+            - text: 5.0万
+    - generic [ref=e153] [cursor=pointer]:
+      - generic [ref=e154]: "2"
+      - img [ref=e157]
+      - generic [ref=e160]:
+        - generic [ref=e161]:
+          - generic:
+            - generic: 北京
+          - generic:
+            - generic: 高校
+        - heading "北京邮电大学沙河校区" [level=4] [ref=e162]
+        - paragraph [ref=e163]: 北邮沙河校区，适合作为校园导览、路线规划和生活服务推荐样例。
+        - generic [ref=e164]:
+          - generic [ref=e165]:
+            - img [ref=e167]
+            - text: "4.8"
+          - generic [ref=e169]:
+            - img [ref=e171]
+            - text: 4.9万
+    - generic [ref=e173] [cursor=pointer]:
+      - generic [ref=e174]: "3"
+      - img [ref=e177]
+      - generic [ref=e180]:
+        - generic [ref=e181]:
+          - generic:
+            - generic: 北京
+          - generic:
+            - generic: 高校
+        - heading "北京航空航天大学学院路校区" [level=4] [ref=e182]
+        - paragraph [ref=e183]: 北航学院路校区，包含主楼、博物馆、体育和生活服务设施。
+        - generic [ref=e184]:
+          - generic [ref=e185]:
+            - img [ref=e187]
+            - text: "4.8"
+          - generic [ref=e189]:
+            - img [ref=e191]
+            - text: 4.8万
+    - generic [ref=e193] [cursor=pointer]:
+      - generic [ref=e194]: "4"
+      - img [ref=e197]
+      - generic [ref=e200]:
+        - generic [ref=e201]:
+          - generic:
+            - generic: 北京
+          - generic:
+            - generic: 高校
+        - heading "北京航空航天大学沙河校区" [level=4] [ref=e202]
+        - paragraph [ref=e203]: 北航沙河校区，覆盖教学楼、宿舍、食堂、运动和景观空间。
+        - generic [ref=e204]:
+          - generic [ref=e205]:
+            - img [ref=e207]
+            - text: "4.7"
+          - generic [ref=e209]:
+            - img [ref=e211]
+            - text: 4.7万
+    - generic [ref=e213] [cursor=pointer]:
+      - generic [ref=e214]: "5"
+      - img [ref=e217]
+      - generic [ref=e220]:
+        - generic [ref=e221]:
+          - generic:
+            - generic: 上海
+          - generic:
+            - generic: 主题乐园
+        - heading "迪士尼乐园(上海)" [level=4] [ref=e222]
+        - paragraph [ref=e223]: 点亮心中奇梦。
+        - generic [ref=e224]:
+          - generic [ref=e225]:
+            - img [ref=e227]
+            - text: "4.8"
+          - generic [ref=e229]:
+            - img [ref=e231]
+            - text: 2.0万
+    - generic [ref=e233] [cursor=pointer]:
+      - generic [ref=e234]: "6"
+      - img [ref=e237]
+      - generic [ref=e240]:
+        - generic [ref=e241]:
+          - generic:
+            - generic: 杭州
+          - generic:
+            - generic: 滨水海岛
+        - heading "西湖风景名胜区" [level=4] [ref=e242]
+        - paragraph [ref=e243]: 欲把西湖比西子，淡妆浓抹总相宜。
+        - generic [ref=e244]:
+          - generic [ref=e245]:
+            - img [ref=e247]
+            - text: "4.9"
+          - generic [ref=e249]:
+            - img [ref=e251]
+            - text: 1.8万
+    - generic [ref=e253] [cursor=pointer]:
+      - generic [ref=e254]: "7"
+      - img [ref=e257]
+      - generic [ref=e260]:
+        - generic [ref=e261]:
+          - generic:
+            - generic: 上海
+          - generic:
+            - generic: 城市地标
+        - heading "南京东路步行街" [level=4] [ref=e262]
+        - paragraph [ref=e263]: 中华商业第一街。
+        - generic [ref=e264]:
+          - generic [ref=e265]:
+            - img [ref=e267]
+            - text: "4.7"
+          - generic [ref=e269]:
+            - img [ref=e271]
+            - text: 1.8万
+    - generic [ref=e273] [cursor=pointer]:
+      - generic [ref=e274]: "8"
+      - img [ref=e277]
+      - generic [ref=e280]:
+        - generic [ref=e281]:
+          - generic:
+            - generic: 上海
+          - generic:
+            - generic: 城市地标
+        - heading "上海外滩" [level=4] [ref=e282]
+        - paragraph [ref=e283]: 万国建筑博览群。
+        - generic [ref=e284]:
+          - generic [ref=e285]:
+            - img [ref=e287]
+            - text: "4.8"
+          - generic [ref=e289]:
+            - img [ref=e291]
+            - text: 1.6万
+    - generic [ref=e293] [cursor=pointer]:
+      - generic [ref=e294]: "9"
+      - img [ref=e297]
+      - generic [ref=e300]:
+        - generic [ref=e301]:
+          - generic:
+            - generic: 广州
+          - generic:
+            - generic: 宗教寺庙
+        - heading "广州塔(小蛮腰)" [level=4] [ref=e302]
+        - paragraph [ref=e303]: 羊城地标。
+        - generic [ref=e304]:
+          - generic [ref=e305]:
+            - img [ref=e307]
+            - text: "4.8"
+          - generic [ref=e309]:
+            - img [ref=e311]
+            - text: 1.6万
+    - generic [ref=e313] [cursor=pointer]:
+      - generic [ref=e314]: "10"
+      - img [ref=e317]
+      - generic [ref=e320]:
+        - generic [ref=e321]:
+          - generic:
+            - generic: 北京
+          - generic:
+            - generic: 宗教寺庙
+        - heading "故宫博物院" [level=4] [ref=e322]
+        - paragraph [ref=e323]: 明清两代皇家宫殿，世界五大宫之首。
+        - generic [ref=e324]:
+          - generic [ref=e325]:
+            - img [ref=e327]
+            - text: "5"
+          - generic [ref=e329]:
+            - img [ref=e331]
+            - text: 1.5万

@@ -1,0 +1,436 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.AdminRouteGraphMapper">
+
+    <select id="existsPlaceGroup" resultType="int">
+        SELECT COUNT(*)
+        FROM place_groups
+        WHERE id = #{placeGroupId}
+    </select>
+
+    <select id="findSpotIdByPlaceGroupId" resultType="long">
+        SELECT id
+        FROM spots
+        WHERE legacy_place_group_id = #{placeGroupId}
+          AND status = 1
+        ORDER BY id ASC
+        LIMIT 1
+    </select>
+
+    <select id="findCategoryIdByCode" resultType="long">
+        SELECT id
+        FROM poi_categories
+        WHERE code = #{code}
+        LIMIT 1
+    </select>
+
+    <select id="findPlaceGroupSummary" resultType="map">
+        SELECT
+          id AS placeGroupId,
+          name AS placeGroupName,
+          short_name AS placeGroupShortName,
+          COALESCE(route_graph_status, 'none') AS routeGraphStatus,
+          city,
+          address
+        FROM place_groups
+        WHERE id = #{placeGroupId}
+        LIMIT 1
+    </select>
+
+    <select id="listNodes" resultType="com.tourwise.model.RouteGraphNodeRecord">
+        SELECT
+          p.id,
+          p.spot_id AS spotId,
+          p.place_group_id AS placeGroupId,
+          p.name,
+          c.code AS categoryCode,
+          c.name AS categoryName,
+          p.area_code AS areaCode,
+          p.area_name AS areaName,
+          p.longitude,
+          p.latitude,
+          p.map_x AS mapX,
+          p.map_y AS mapY
+        FROM pois p
+        JOIN poi_categories c ON c.id = p.category_id
+        WHERE p.place_group_id = #{placeGroupId}
+          AND p.status = 1
+          AND COALESCE(p.area_code, '') != 'campus_summary'
+          AND p.map_x IS NOT NULL
+          AND p.map_y IS NOT NULL
+        ORDER BY
+          CASE WHEN p.area_code = 'route' THEN 2 ELSE 1 END,
+          p.id ASC
+    </select>
+
+    <select id="listEdges" resultType="com.tourwise.model.RouteGraphEdgeRecord">
+        SELECT
+          e.id,
+          e.from_poi_id AS fromPoiId,
+          e.to_poi_id AS toPoiId,
+          e.distance_m AS distanceM,
+          e.duration_min AS durationMin,
+          e.transport_type AS transportType,
+          e.is_indoor AS indoor,
+          e.description
+        FROM route_edges e
+        JOIN pois fp ON fp.id = e.from_poi_id
+        JOIN pois tp ON tp.id = e.to_poi_id
+        WHERE fp.place_group_id = #{placeGroupId}
+          AND tp.place_group_id = #{placeGroupId}
+          AND fp.status = 1
+          AND tp.status = 1
+        ORDER BY e.id ASC
+    </select>
+
+    <update id="updatePoiCoordinate">
+        UPDATE pois
+        SET
+          map_x = #{mapX},
+          map_y = #{mapY},
+          longitude = #{longitude},
+          latitude = #{latitude}
+        WHERE id = #{id}
+          AND place_group_id = #{placeGroupId}
+          AND status = 1
+          AND COALESCE(area_code, '') != 'route'
+    </update>
+
+    <delete id="deleteEdgesByPlaceGroupId">
+        DELETE e
+        FROM route_edges e
+        JOIN pois fp ON fp.id = e.from_poi_id
+        JOIN pois tp ON tp.id = e.to_poi_id
+        WHERE fp.place_group_id = #{placeGroupId}
+          AND tp.place_group_id = #{placeGroupId}
+    </delete>
+
+    <delete id="deleteRouteNodesByPlaceGroupId">
+        DELETE FROM pois
+        WHERE place_group_id = #{placeGroupId}
+          AND area_code = 'route'
+    </delete>
+
+    <insert id="insertRouteNode" parameterType="com.tourwise.model.RouteGraphNodeRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO pois
+          (spot_id, poi_role, place_group_id, category_id, name, scene, area_code, area_name,
+           province, city, address, location_text, description, longitude, latitude, map_x, map_y,
+           rating, hotness, visit_count, status)
+        SELECT
+          #{spotId},
+          'route_legacy',
+          #{placeGroupId},
+          #{categoryId},
+          #{name},
+          'campus',
+          'route',
+          '路线节点',
+          '北京市',
+          pg.city,
+          pg.address,
+          pg.short_name,
+          #{name},
+          #{longitude},
+          #{latitude},
+          #{mapX},
+          #{mapY},
+          4.8,
+          0,
+          0,
+          1
+        FROM place_groups pg
+        WHERE pg.id = #{placeGroupId}
+    </insert>
+
+    <insert id="insertEdge" parameterType="com.tourwise.model.RouteEdge">
+        INSERT INTO route_edges
+          (from_poi_id, to_poi_id, distance_m, duration_min, transport_type, congestion_factor, is_indoor, description)
+        VALUES
+          (#{fromPoiId}, #{toPoiId}, #{distanceM}, #{durationMin}, #{transportType}, #{congestionFactor}, #{indoor}, #{description})
+    </insert>
+
+    <select id="nextVersionNo" resultType="int">
+        SELECT COALESCE(MAX(version_no), 0) + 1
+        FROM route_graph_versions
+        WHERE place_group_id = #{placeGroupId}
+    </select>
+
+    <insert id="insertVersion" parameterType="com.tourwise.model.RouteGraphVersionRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO route_graph_versions
+          (place_group_id, version_no, name, snapshot_json, node_count, edge_count, created_by, remark)
+        VALUES
+          (#{placeGroupId}, #{versionNo}, #{name}, #{snapshotJson}, #{nodeCount}, #{edgeCount}, #{createdBy}, #{remark})
+    </insert>
+
+    <select id="listVersions" resultType="com.tourwise.model.RouteGraphVersionRecord">
+        SELECT
+          v.id,
+          v.place_group_id AS placeGroupId,
+          v.version_no AS versionNo,
+          v.name,
+          v.node_count AS nodeCount,
+          v.edge_count AS edgeCount,
+          v.created_by AS createdBy,
+          u.username AS createdByName,
+          v.remark,
+          v.created_at AS createdAt
+        FROM route_graph_versions v
+        LEFT JOIN users u ON u.id = v.created_by
+        WHERE v.place_group_id = #{placeGroupId}
+        ORDER BY v.version_no DESC, v.id DESC
+    </select>
+
+    <select id="findVersion" resultType="com.tourwise.model.RouteGraphVersionRecord">
+        SELECT
+          v.id,
+          v.place_group_id AS placeGroupId,
+          v.version_no AS versionNo,
+          v.name,
+          v.snapshot_json AS snapshotJson,
+          v.node_count AS nodeCount,
+          v.edge_count AS edgeCount,
+          v.created_by AS createdBy,
+          u.username AS createdByName,
+          v.remark,
+          v.created_at AS createdAt
+        FROM route_graph_versions v
+        LEFT JOIN users u ON u.id = v.created_by
+        WHERE v.place_group_id = #{placeGroupId}
+          AND v.id = #{versionId}
+        LIMIT 1
+    </select>
+
+    <sql id="VisiblePoiFilter">
+        p.place_group_id = #{placeGroupId}
+        AND p.status = 1
+        AND COALESCE(p.area_code, '') NOT IN ('route', 'campus_summary', 'spot_summary')
+    </sql>
+
+    <select id="qualityOverview" resultType="map">
+        SELECT
+          (
+            SELECT COUNT(*)
+            FROM pois p
+            WHERE <include refid="VisiblePoiFilter" />
+          ) AS poiCount,
+          (
+            SELECT COUNT(*)
+            FROM pois p
+            WHERE p.place_group_id = #{placeGroupId}
+              AND p.status = 1
+              AND p.area_code = 'route'
+          ) AS routeNodeCount,
+          (
+            SELECT COUNT(*)
+            FROM route_edges e
+            JOIN pois fp ON fp.id = e.from_poi_id
+            JOIN pois tp ON tp.id = e.to_poi_id
+            WHERE fp.place_group_id = #{placeGroupId}
+              AND tp.place_group_id = #{placeGroupId}
+              AND fp.status = 1
+              AND tp.status = 1
+          ) AS edgeCount
+    </select>
+
+    <select id="listMissingMapPointPois" resultType="map">
+        SELECT
+          p.id AS nodeId,
+          p.name AS nodeName
+        FROM pois p
+        WHERE <include refid="VisiblePoiFilter" />
+          AND (p.map_x IS NULL OR p.map_y IS NULL)
+        ORDER BY p.id ASC
+    </select>
+
+    <select id="listIsolatedPois" resultType="map">
+        SELECT
+          p.id AS nodeId,
+          p.name AS nodeName
+        FROM pois p
+        WHERE <include refid="VisiblePoiFilter" />
+          AND p.map_x IS NOT NULL
+          AND p.map_y IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM route_edges e
+            WHERE e.from_poi_id = p.id OR e.to_poi_id = p.id
+          )
+        ORDER BY p.id ASC
+    </select>
+
+    <select id="listIsolatedRouteNodes" resultType="map">
+        SELECT
+          p.id AS nodeId,
+          p.name AS nodeName
+        FROM pois p
+        WHERE p.place_group_id = #{placeGroupId}
+          AND p.status = 1
+          AND p.area_code = 'route'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM route_edges e
+            WHERE e.from_poi_id = p.id OR e.to_poi_id = p.id
+          )
+        ORDER BY p.id ASC
+    </select>
+
+    <select id="listLongEdges" resultType="map">
+        SELECT
+          e.id AS edgeId,
+          e.from_poi_id AS fromNodeId,
+          fp.name AS fromNodeName,
+          e.to_poi_id AS toNodeId,
+          tp.name AS toNodeName,
+          e.distance_m AS distanceM
+        FROM route_edges e
+        JOIN pois fp ON fp.id = e.from_poi_id
+        JOIN pois tp ON tp.id = e.to_poi_id
+        WHERE fp.place_group_id = #{placeGroupId}
+          AND tp.place_group_id = #{placeGroupId}
+          AND fp.status = 1
+          AND tp.status = 1
+          AND e.distance_m &gt; #{maxDistanceM}
+          AND e.from_poi_id &lt; e.to_poi_id
+        ORDER BY e.distance_m DESC, e.id ASC
+    </select>
+
+    <select id="listDuplicateDirectedEdges" resultType="map">
+        SELECT
+          MIN(e.id) AS edgeId,
+          e.from_poi_id AS fromNodeId,
+          fp.name AS fromNodeName,
+          e.to_poi_id AS toNodeId,
+          tp.name AS toNodeName,
+          COUNT(*) AS duplicateCount
+        FROM route_edges e
+        JOIN pois fp ON fp.id = e.from_poi_id
+        JOIN pois tp ON tp.id = e.to_poi_id
+        WHERE fp.place_group_id = #{placeGroupId}
+          AND tp.place_group_id = #{placeGroupId}
+        GROUP BY e.from_poi_id, fp.name, e.to_poi_id, tp.name
+        HAVING COUNT(*) &gt; 1
+        ORDER BY duplicateCount DESC, edgeId ASC
+    </select>
+
+    <select id="listSelfLoopEdges" resultType="map">
+        SELECT
+          e.id AS edgeId,
+          e.from_poi_id AS fromNodeId,
+          fp.name AS fromNodeName,
+          e.to_poi_id AS toNodeId,
+          tp.name AS toNodeName,
+          e.distance_m AS distanceM
+        FROM route_edges e
+        JOIN pois fp ON fp.id = e.from_poi_id
+        JOIN pois tp ON tp.id = e.to_poi_id
+        WHERE fp.place_group_id = #{placeGroupId}
+          AND tp.place_group_id = #{placeGroupId}
+          AND e.from_poi_id = e.to_poi_id
+        ORDER BY e.id ASC
+    </select>
+
+    <select id="listInvalidEdges" resultType="map">
+        SELECT
+          e.id AS edgeId,
+          e.from_poi_id AS fromNodeId,
+          fp.name AS fromNodeName,
+          e.to_poi_id AS toNodeId,
+          tp.name AS toNodeName,
+          e.distance_m AS distanceM
+        FROM route_edges e
+        LEFT JOIN pois fp ON fp.id = e.from_poi_id
+        LEFT JOIN pois tp ON tp.id = e.to_poi_id
+        WHERE (fp.place_group_id = #{placeGroupId} OR tp.place_group_id = #{placeGroupId})
+          AND (
+            fp.id IS NULL
+            OR tp.id IS NULL
+            OR fp.status != 1
+            OR tp.status != 1
+          )
+        ORDER BY e.id ASC
+    </select>
+
+    <select id="listCrossGroupEdges" resultType="map">
+        SELECT
+          e.id AS edgeId,
+          e.from_poi_id AS fromNodeId,
+          fp.name AS fromNodeName,
+          e.to_poi_id AS toNodeId,
+          tp.name AS toNodeName,
+          e.distance_m AS distanceM
+        FROM route_edges e
+        JOIN pois fp ON fp.id = e.from_poi_id
+        JOIN pois tp ON tp.id = e.to_poi_id
+        WHERE (fp.place_group_id = #{placeGroupId} OR tp.place_group_id = #{placeGroupId})
+          AND fp.place_group_id != tp.place_group_id
+        ORDER BY e.id ASC
+    </select>
+
+    <delete id="deleteInvalidEdges">
+        DELETE e
+        FROM route_edges e
+        LEFT JOIN pois fp ON fp.id = e.from_poi_id
+        LEFT JOIN pois tp ON tp.id = e.to_poi_id
+        WHERE (fp.place_group_id = #{placeGroupId} OR tp.place_group_id = #{placeGroupId})
+          AND (
+            fp.id IS NULL
+            OR tp.id IS NULL
+            OR fp.status != 1
+            OR tp.status != 1
+          )
+    </delete>
+
+    <delete id="deleteCrossGroupEdges">
+        DELETE e
+        FROM route_edges e
+        JOIN pois fp ON fp.id = e.from_poi_id
+        JOIN pois tp ON tp.id = e.to_poi_id
+        WHERE (fp.place_group_id = #{placeGroupId} OR tp.place_group_id = #{placeGroupId})
+          AND fp.place_group_id != tp.place_group_id
+    </delete>
+
+    <delete id="deleteSelfLoopEdges">
+        DELETE e
+        FROM route_edges e
+        JOIN pois fp ON fp.id = e.from_poi_id
+        JOIN pois tp ON tp.id = e.to_poi_id
+        WHERE fp.place_group_id = #{placeGroupId}
+          AND tp.place_group_id = #{placeGroupId}
+          AND e.from_poi_id = e.to_poi_id
+    </delete>
+
+    <delete id="deleteDuplicateDirectedEdges">
+        DELETE e
+        FROM route_edges e
+        JOIN (
+          SELECT duplicate_edge_ids.id
+          FROM (
+            SELECT e1.id
+            FROM route_edges e1
+            JOIN pois fp1 ON fp1.id = e1.from_poi_id
+            JOIN pois tp1 ON tp1.id = e1.to_poi_id
+            JOIN (
+              SELECT
+                e2.from_poi_id,
+                e2.to_poi_id,
+                MIN(e2.id) AS keep_id
+              FROM route_edges e2
+              JOIN pois fp2 ON fp2.id = e2.from_poi_id
+              JOIN pois tp2 ON tp2.id = e2.to_poi_id
+              WHERE fp2.place_group_id = #{placeGroupId}
+                AND tp2.place_group_id = #{placeGroupId}
+              GROUP BY e2.from_poi_id, e2.to_poi_id
+            ) kept ON kept.from_poi_id = e1.from_poi_id
+                   AND kept.to_poi_id = e1.to_poi_id
+            WHERE fp1.place_group_id = #{placeGroupId}
+              AND tp1.place_group_id = #{placeGroupId}
+              AND e1.id != kept.keep_id
+          ) duplicate_edge_ids
+        ) duplicated ON duplicated.id = e.id
+    </delete>
+
+</mapper>

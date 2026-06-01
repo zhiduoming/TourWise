@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: TourWise
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${TOURWISE_DB_HOST:localhost}:${TOURWISE_DB_PORT:3306}/${TOURWISE_DB_NAME:tourist_system}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    username: ${TOURWISE_DB_USER:root}
+    password: ${TOURWISE_DB_PASSWORD:}
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+mybatis:
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: com.tourwise
+  configuration:
+    map-underscore-to-camel-case: true
+
+tourwise:
+  jwt:
+    secret: ${TOURWISE_JWT_SECRET:tourwise-dev-secret-change-me}
+    expire-hours: 168
+  upload:
+    dir: ${TOURWISE_UPLOAD_DIR:uploads}
+    url-prefix: /uploads
+  oss:
+    endpoint: "https://oss-cn-beijing.aliyuncs.com"
+    bucket: ${TOURWISE_OSS_BUCKET:tourwise}
+    access-key-id: ${TOURWISE_OSS_AK:}
+    access-key-secret: ${TOURWISE_OSS_SK:}
+    public-base-url: ${TOURWISE_OSS_BASE_URL:https://tourwise.oss-cn-beijing.aliyuncs.com}
+    avatar-prefix: "avatar"
+    file-prefix: ${TOURWISE_OSS_FILE_PREFIX:uploads}
+  amap:
+    enabled: ${TOURWISE_AMAP_ENABLED:false}
+    js-key: ${TOURWISE_AMAP_JS_KEY:}
+    security-code: ${TOURWISE_AMAP_SECURITY_CODE:}
+    web-key: ${TOURWISE_AMAP_WEB_KEY:}
+  ai:
+    api-key: ${TOURWISE_AI_API_KEY:your-deepseek-api-key-here}
+    api-url: https://api.deepseek.com/v1/chat/completions
+    model: deepseek-chat

@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.SearchMapper">
+
+    <sql id="FacilityColumns">
+        p.id,
+        p.name,
+        c.code AS type,
+        c.name AS typeName,
+        c.code AS category,
+        c.name AS categoryName,
+        p.description,
+        p.location_text AS location,
+        p.area_code AS area,
+        p.area_name AS areaName,
+        p.address,
+        COALESCE(p.province, pg.city) AS province,
+        COALESCE(p.city, pg.city) AS city,
+        p.image_url AS image,
+        p.longitude,
+        p.latitude,
+        DATE_FORMAT(p.open_time, '%H:%i') AS openTime,
+        DATE_FORMAT(p.close_time, '%H:%i') AS closeTime,
+        p.phone,
+        p.rating,
+        p.rating AS score,
+        p.hotness,
+        p.visit_count AS visits,
+        pg.id AS placeGroupId,
+        pg.name AS placeGroupName,
+        pg.short_name AS shortName,
+        pg.district
+    </sql>
+
+    <sql id="FacilityFilter">
+        WHERE p.status = 1
+        <if test="keyword != null">
+            AND (p.name LIKE CONCAT('%', #{keyword}, '%')
+                 OR p.description LIKE CONCAT('%', #{keyword}, '%')
+                 OR p.address LIKE CONCAT('%', #{keyword}, '%')
+                 OR p.location_text LIKE CONCAT('%', #{keyword}, '%')
+                 OR pg.name LIKE CONCAT('%', #{keyword}, '%')
+                 OR pg.short_name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="type != null">
+            AND c.code = #{type}
+        </if>
+        <if test="area != null">
+            AND p.area_code = #{area}
+        </if>
+        <if test="scene != null">
+            AND p.scene = #{scene}
+        </if>
+        <if test="placeGroupId != null">
+            AND p.place_group_id = #{placeGroupId}
+        </if>
+        <if test="province != null">
+            AND (
+              p.province = #{province}
+              OR p.province LIKE CONCAT('%', #{province}, '%')
+              OR p.name LIKE CONCAT('%', #{province}, '%')
+              OR p.address LIKE CONCAT('%', #{province}, '%')
+              OR p.location_text LIKE CONCAT('%', #{province}, '%')
+              OR pg.name LIKE CONCAT('%', #{province}, '%')
+              OR pg.city LIKE CONCAT('%', #{province}, '%')
+              OR pg.district LIKE CONCAT('%', #{province}, '%')
+            )
+        </if>
+        <if test="city != null">
+            AND (
+              p.city = #{city}
+              OR p.city LIKE CONCAT('%', #{city}, '%')
+              OR p.name LIKE CONCAT('%', #{city}, '%')
+              OR p.address LIKE CONCAT('%', #{city}, '%')
+              OR p.location_text LIKE CONCAT('%', #{city}, '%')
+              OR pg.name LIKE CONCAT('%', #{city}, '%')
+              OR pg.city LIKE CONCAT('%', #{city}, '%')
+              OR pg.district LIKE CONCAT('%', #{city}, '%')
+            )
+        </if>
+        <if test="shortName != null">
+            AND (
+              p.name LIKE CONCAT('%', #{shortName}, '%')
+              OR p.location_text LIKE CONCAT('%', #{shortName}, '%')
+              OR pg.name LIKE CONCAT('%', #{shortName}, '%')
+              OR pg.short_name LIKE CONCAT('%', #{shortName}, '%')
+            )
+        </if>
+        <if test="spotOnly">
+            AND (
+              p.scene = 'city'
+              OR p.place_group_id = 100
+              OR p.area_code = 'campus_summary'
+            )
+            AND COALESCE(p.area_code, '') != 'route'
+        </if>
+        <if test="tag != null">
+            <choose>
+                <when test="tag == 'scenery'">
+                    AND c.code IN ('scenic', 'natural', 'waterfront', 'theme_park')
+                </when>
+                <when test="tag == 'culture'">
+                    AND c.code IN ('historic', 'religious', 'memorial', 'landmark')
+                </when>
+                <when test="tag == 'museum'">
+                    AND c.code = 'museum'
+                </when>
+                <when test="tag == 'university'">
+                    AND c.code = 'university'
+                </when>
+                <when test="tag == 'landmark'">
+                    AND c.code IN ('landmark', 'commercial')
+                </when>
+                <when test="tag == 'park'">
+                    AND c.code IN ('natural', 'waterfront')
+                </when>
+                <otherwise>
+                    AND (c.code = #{tag} OR p.area_code = #{tag})
+                </otherwise>
+            </choose>
+        </if>
+    </sql>
+
+    <select id="listTypes" resultType="java.util.Map">
+        SELECT
+          code AS value,
+          name AS label,
+          scene
+        FROM poi_categories
+        ORDER BY sort_order ASC, id ASC
+    </select>
+
+    <select id="searchFacilities" resultType="java.util.Map">
+        SELECT
+        <include refid="FacilityColumns"/>,
+        0 AS distance
+        FROM pois p
+        JOIN poi_categories c ON c.id = p.category_id
+        LEFT JOIN place_groups pg ON pg.id = p.place_group_id
+        <include refid="FacilityFilter"/>
+        ORDER BY
+          CASE
+            WHEN p.place_group_id = 3 AND p.area_code = 'campus_summary' THEN 1
+            WHEN p.place_group_id = 4 AND p.area_code = 'campus_summary' THEN 2
+            WHEN p.place_group_id = 5 AND p.area_code = 'campus_summary' THEN 3
+            WHEN p.place_group_id = 6 AND p.area_code = 'campus_summary' THEN 4
+            ELSE 100
+          END ASC,
+          p.hotness DESC,
+          p.rating DESC,
+          p.id ASC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countFacilities" resultType="long">
+        SELECT COUNT(*)
+        FROM pois p
+        JOIN poi_categories c ON c.id = p.category_id
+        LEFT JOIN place_groups pg ON pg.id = p.place_group_id
+        <include refid="FacilityFilter"/>
+    </select>
+
+    <select id="findFacilityById" resultType="java.util.Map">
+        SELECT
+        <include refid="FacilityColumns"/>
+        FROM pois p
+        JOIN poi_categories c ON c.id = p.category_id
+        LEFT JOIN place_groups pg ON pg.id = p.place_group_id
+        WHERE p.id = #{id}
+          AND p.status = 1
+    </select>
+
+    <select id="findAiSummary" resultType="java.lang.String">
+        SELECT ai_summary
+        FROM pois
+        WHERE id = #{id}
+          AND status = 1
+    </select>
+
+    <update id="saveAiSummary">
+        UPDATE pois
+        SET ai_summary = #{summary},
+            ai_summary_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+</mapper>

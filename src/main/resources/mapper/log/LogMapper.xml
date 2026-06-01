@@ -1,0 +1,332 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.LogMapper">
+
+    <sql id="LogSelectColumns">
+        l.id,
+        l.user_id,
+        COALESCE(up.nickname, u.username) AS username,
+        up.avatar_url AS avatar,
+        l.poi_id AS spotId,
+        l.poi_id AS spot_id,
+        p.name AS location,
+        l.circle_id,
+        l.itinerary_plan_id AS itineraryPlanId,
+        ip.title AS itineraryPlanTitle,
+        ip.city AS itineraryPlanCity,
+        ip.duration AS itineraryPlanDuration,
+        ip.spot_count AS itineraryPlanSpotCount,
+        ip.summary AS itineraryPlanSummary,
+        l.title,
+        l.content,
+        l.rating,
+        l.scenery_rating,
+        l.facility_rating,
+        l.service_rating,
+        l.traffic_rating,
+        l.value_rating,
+        l.hotness,
+        l.view_count,
+        l.is_top,
+        l.created_at,
+        (SELECT COUNT(*) FROM log_likes ll WHERE ll.log_id = l.id) AS like_count,
+        (SELECT COUNT(*) FROM log_comments lc WHERE lc.log_id = l.id AND lc.status = 1) AS comment_count,
+        CASE WHEN my_like.user_id IS NULL THEN 0 ELSE 1 END AS is_liked
+    </sql>
+
+    <sql id="LogFromClause">
+        FROM travel_logs l
+        JOIN users u ON u.id = l.user_id
+        LEFT JOIN user_profiles up ON up.user_id = u.id
+        LEFT JOIN pois p ON p.id = l.poi_id
+        LEFT JOIN itinerary_plans ip
+          ON ip.id = l.itinerary_plan_id
+         AND ip.status = 1
+        LEFT JOIN log_likes my_like
+          ON my_like.log_id = l.id
+         AND my_like.user_id = #{currentUserId}
+    </sql>
+
+    <sql id="LogWhereClause">
+        WHERE l.status = 1
+        <if test="circleId != null">
+            AND l.circle_id = #{circleId}
+        </if>
+        <if test="userId != null">
+            AND l.user_id = #{userId}
+        </if>
+        <if test="spotId != null">
+            AND l.poi_id = #{spotId}
+        </if>
+        <if test="keyword != null">
+            AND (l.title LIKE CONCAT('%', #{keyword}, '%')
+                 OR l.content LIKE CONCAT('%', #{keyword}, '%')
+                 OR p.name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </sql>
+
+    <select id="list" resultType="java.util.Map">
+        SELECT
+        <include refid="LogSelectColumns"/>
+        <include refid="LogFromClause"/>
+        <include refid="LogWhereClause"/>
+        <choose>
+            <when test='tab == "hot" or tab == "popular"'>
+                ORDER BY l.is_top DESC, l.hotness DESC, like_count DESC, l.created_at DESC
+            </when>
+            <otherwise>
+                ORDER BY l.is_top DESC, l.created_at DESC, l.id DESC
+            </otherwise>
+        </choose>
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*)
+        FROM travel_logs l
+        LEFT JOIN pois p ON p.id = l.poi_id
+        WHERE l.status = 1
+        <if test="circleId != null">
+            AND l.circle_id = #{circleId}
+        </if>
+        <if test="userId != null">
+            AND l.user_id = #{userId}
+        </if>
+        <if test="spotId != null">
+            AND l.poi_id = #{spotId}
+        </if>
+        <if test="keyword != null">
+            AND (l.title LIKE CONCAT('%', #{keyword}, '%')
+                 OR l.content LIKE CONCAT('%', #{keyword}, '%')
+                 OR p.name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </select>
+
+    <select id="findById" resultType="java.util.Map">
+        SELECT
+        <include refid="LogSelectColumns"/>
+        <include refid="LogFromClause"/>
+        WHERE l.id = #{id}
+          AND l.status = 1
+    </select>
+
+    <update id="increaseViewCount">
+        UPDATE travel_logs
+        SET view_count = view_count + 1,
+            hotness = hotness + 1
+        WHERE id = #{id}
+          AND status = 1
+    </update>
+
+    <insert id="insert" parameterType="com.tourwise.model.LogRecord" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO travel_logs (
+          user_id, poi_id, circle_id, itinerary_plan_id, title, content, rating,
+          scenery_rating, facility_rating, service_rating, traffic_rating, value_rating
+        )
+        VALUES (
+          #{userId}, #{poiId}, #{circleId}, #{itineraryPlanId}, #{title}, #{content}, #{rating},
+          #{sceneryRating}, #{facilityRating}, #{serviceRating}, #{trafficRating}, #{valueRating}
+        )
+    </insert>
+
+    <insert id="insertImage">
+        INSERT INTO log_images (log_id, image_url, sort_order)
+        VALUES (#{logId}, #{imageUrl}, #{sortOrder})
+    </insert>
+
+    <insert id="insertIgnoreTag">
+        INSERT IGNORE INTO tags (name, tag_type)
+        VALUES (#{name}, 'log')
+    </insert>
+
+    <select id="findLogTagId" resultType="long">
+        SELECT id
+        FROM tags
+        WHERE name = #{name}
+          AND tag_type = 'log'
+    </select>
+
+    <insert id="insertLogTag">
+        INSERT IGNORE INTO log_tag_relations (log_id, tag_id)
+        VALUES (#{logId}, #{tagId})
+    </insert>
+
+    <select id="listImages" resultType="java.util.Map">
+        SELECT log_id, image_url
+        FROM log_images
+        WHERE log_id IN
+        <foreach collection="logIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        ORDER BY log_id, sort_order, id
+    </select>
+
+    <select id="listTags" resultType="java.util.Map">
+        SELECT ltr.log_id, t.name
+        FROM log_tag_relations ltr
+        JOIN tags t ON t.id = ltr.tag_id
+        WHERE ltr.log_id IN
+        <foreach collection="logIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        ORDER BY ltr.log_id, t.id
+    </select>
+
+    <select id="exists" resultType="int">
+        SELECT COUNT(*)
+        FROM travel_logs
+        WHERE id = #{id}
+          AND status = 1
+    </select>
+
+    <select id="findOwnerId" resultType="long">
+        SELECT user_id
+        FROM travel_logs
+        WHERE id = #{id}
+          AND status = 1
+    </select>
+
+    <select id="findNotificationInfo" resultType="java.util.Map">
+        SELECT
+          user_id AS userId,
+          title,
+          content
+        FROM travel_logs
+        WHERE id = #{id}
+          AND status = 1
+    </select>
+
+    <select id="findPoiId" resultType="long">
+        SELECT poi_id
+        FROM travel_logs
+        WHERE id = #{id}
+          AND status = 1
+    </select>
+
+    <update id="softDelete">
+        UPDATE travel_logs
+        SET status = 0
+        WHERE id = #{id}
+          AND user_id = #{userId}
+          AND status = 1
+    </update>
+
+    <update id="softDeleteByAdmin">
+        UPDATE travel_logs
+        SET status = 0
+        WHERE id = #{id}
+          AND status = 1
+    </update>
+
+    <update id="refreshPoiRatingFromLogs">
+        UPDATE pois
+        SET rating = (
+          SELECT ROUND(AVG(l.rating), 1)
+          FROM travel_logs l
+          WHERE l.poi_id = #{poiId}
+            AND l.status = 1
+            AND l.rating IS NOT NULL
+        )
+        WHERE id = #{poiId}
+          AND EXISTS (
+            SELECT 1
+            FROM travel_logs l
+            WHERE l.poi_id = #{poiId}
+              AND l.status = 1
+              AND l.rating IS NOT NULL
+          )
+    </update>
+
+    <update id="refreshSpotRatingByPoiIdFromLogs">
+        UPDATE spots s
+        JOIN pois p
+          ON p.id = #{poiId}
+         AND p.status = 1
+        SET s.rating = p.rating
+        WHERE s.status = 1
+          AND (
+            s.id = p.spot_id
+            OR s.representative_poi_id = p.id
+            OR s.legacy_poi_id = p.id
+          )
+    </update>
+
+    <select id="hasLike" resultType="int">
+        SELECT COUNT(*)
+        FROM log_likes
+        WHERE log_id = #{logId}
+          AND user_id = #{userId}
+    </select>
+
+    <insert id="insertLike">
+        INSERT INTO log_likes (log_id, user_id)
+        VALUES (#{logId}, #{userId})
+    </insert>
+
+    <delete id="deleteLike">
+        DELETE FROM log_likes
+        WHERE log_id = #{logId}
+          AND user_id = #{userId}
+    </delete>
+
+    <update id="adjustHotness">
+        UPDATE travel_logs
+        SET hotness = GREATEST(0, hotness + #{delta})
+        WHERE id = #{id}
+    </update>
+
+    <insert id="insertComment" parameterType="com.tourwise.model.CommentRecord" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO log_comments (log_id, user_id, parent_id, content)
+        VALUES (#{logId}, #{userId}, #{parentId}, #{content})
+    </insert>
+
+    <select id="existsCommentInLog" resultType="int">
+        SELECT COUNT(*)
+        FROM log_comments
+        WHERE id = #{id}
+          AND log_id = #{logId}
+          AND status = 1
+    </select>
+
+    <select id="existsComment" resultType="int">
+        SELECT COUNT(*)
+        FROM log_comments
+        WHERE id = #{id}
+          AND status = 1
+    </select>
+
+    <select id="findCommentLogId" resultType="long">
+        SELECT log_id
+        FROM log_comments
+        WHERE id = #{id}
+          AND status = 1
+    </select>
+
+    <update id="softDeleteCommentByAdmin">
+        UPDATE log_comments
+        SET status = 0
+        WHERE id = #{id}
+          AND status = 1
+    </update>
+
+    <select id="listComments" resultType="java.util.Map">
+        SELECT
+          c.id,
+          c.log_id,
+          c.user_id,
+          c.parent_id,
+          COALESCE(up.nickname, u.username) AS username,
+          up.avatar_url AS avatar,
+          c.content,
+          c.created_at
+        FROM log_comments c
+        JOIN users u ON u.id = c.user_id
+        LEFT JOIN user_profiles up ON up.user_id = u.id
+        WHERE c.log_id = #{logId}
+          AND c.status = 1
+        ORDER BY COALESCE(c.parent_id, c.id), c.parent_id IS NOT NULL, c.created_at ASC, c.id ASC
+    </select>
+
+</mapper>

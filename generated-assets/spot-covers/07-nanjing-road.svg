@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <defs>
+    <linearGradient id="bg-nanjing" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2d3d60"/>
+      <stop offset="1" stop-color="#1b2030"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="12" stdDeviation="16" flood-opacity="0.22"/></filter>
+    <pattern id="grain-nanjing" width="80" height="80" patternUnits="userSpaceOnUse">
+      <circle cx="9" cy="14" r="1" fill="white" opacity="0.08"/><circle cx="47" cy="31" r="1.2" fill="black" opacity="0.05"/><circle cx="68" cy="66" r="1" fill="white" opacity="0.06"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg-nanjing)"/>
+  <rect width="1200" height="675" fill="url(#grain-nanjing)"/>
+  <polygon points="0,675 458,250 742,250 1200,675" fill="#343844"/>
+  <line x1="600" y1="265" x2="600" y2="675" stroke="#f3d45d" stroke-width="7" opacity="0.9"/>
+  <g fill="#425272" opacity="0.95"><rect x="20" y="170" width="80" height="505"/><rect x="125" y="95" width="86" height="580"/><rect x="238" y="205" width="72" height="470"/><rect x="344" y="135" width="86" height="540"/><rect x="770" y="160" width="82" height="515"/><rect x="880" y="80" width="88" height="595"/><rect x="995" y="190" width="76" height="485"/><rect x="1090" y="120" width="82" height="555"/></g>
+  <g fill="#ffd76a" opacity="0.78"><rect x="42" y="215" width="22" height="26"/><rect x="153" y="150" width="24" height="28"/><rect x="275" y="255" width="18" height="24"/><rect x="378" y="190" width="22" height="26"/><rect x="812" y="220" width="22" height="26"/><rect x="917" y="130" width="24" height="28"/><rect x="1028" y="245" width="18" height="24"/><rect x="1124" y="168" width="22" height="26"/></g>
+  <g font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="38" font-weight="800" fill="#fff"><rect x="150" y="238" width="168" height="64" rx="8" fill="#e34b45" opacity="0.92"/><text x="184" y="284">南京路</text><rect x="870" y="248" width="168" height="64" rx="8" fill="#3f8be4" opacity="0.92"/><text x="902" y="294">步行街</text></g>
+<rect x="48" y="498" width="1104" height="128" rx="24" fill="rgba(12,18,30,0.56)"/>
+  <text x="84" y="560" font-size="58" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-weight="800" fill="#ffffff">南京东路步行街</text>
+  <text x="88" y="604" font-size="28" font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#edf3fb">霓虹商街 · 海派建筑 · 城市夜游</text>
+</svg>

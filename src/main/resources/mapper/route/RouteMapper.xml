@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.RouteMapper">
+
+    <sql id="RoutePoiColumns">
+        p.id,
+        p.name,
+        c.name AS category,
+        c.code AS type,
+        p.area_code AS areaCode,
+        p.longitude,
+        p.latitude,
+        p.map_x AS mapX,
+        p.map_y AS mapY,
+        p.place_group_id AS placeGroupId
+    </sql>
+
+    <sql id="DistanceMetersFromInput">
+        ROUND(
+          6371000 * 2 * ASIN(
+            SQRT(
+              POW(SIN(RADIANS((latitude - #{latitude}) / 2)), 2)
+              + COS(RADIANS(#{latitude}))
+              * COS(RADIANS(latitude))
+              * POW(SIN(RADIANS((longitude - #{longitude}) / 2)), 2)
+            )
+          )
+        )
+    </sql>
+
+    <select id="listRouteSpots" resultType="java.util.Map">
+        SELECT
+          s.id,
+          s.legacy_place_group_id AS placeGroupId,
+          s.name,
+          s.short_name AS shortName,
+          s.spot_type AS spotType,
+          s.province,
+          s.city,
+          s.district,
+          s.longitude,
+          s.latitude,
+          COALESCE(s.location_radius_m, 500) AS locationRadiusM,
+          COALESCE(pg.route_graph_status, 'none') AS routeGraphStatus
+        FROM spots s
+        LEFT JOIN place_groups pg ON pg.id = s.legacy_place_group_id
+        WHERE s.status = 1
+          AND s.longitude IS NOT NULL
+          AND s.latitude IS NOT NULL
+        ORDER BY
+          CASE
+            WHEN s.legacy_place_group_id = 3 THEN 1
+            WHEN s.legacy_place_group_id = 4 THEN 2
+            WHEN s.legacy_place_group_id = 5 THEN 3
+            WHEN s.legacy_place_group_id = 6 THEN 4
+            ELSE 20
+          END,
+          s.hotness DESC,
+          s.id ASC
+    </select>
+
+    <select id="listRouteScopes" resultType="java.util.Map">
+        SELECT
+          pg.id AS placeGroupId,
+          pg.name,
+          COALESCE(pg.route_graph_status, 'none') AS routeGraphStatus,
+          MAX(pgm.map_width) AS mapWidth,
+          MAX(pgm.map_height) AS mapHeight,
+          COUNT(DISTINCT p.id) AS poiCount
+        FROM place_groups pg
+        JOIN pois p ON p.place_group_id = pg.id
+        LEFT JOIN place_group_maps pgm ON pgm.place_group_id = pg.id
+        WHERE p.status = 1
+          AND COALESCE(pg.route_graph_status, 'none') IN ('draft', 'verified')
+          AND COALESCE(p.area_code, '') != 'route'
+          AND COALESCE(p.area_code, '') != 'campus_summary'
+        GROUP BY pg.id, pg.name, pg.route_graph_status
+        ORDER BY pg.id ASC
+    </select>
+
+    <select id="listPois" resultType="java.util.Map">
+        SELECT
+        <include refid="RoutePoiColumns"/>
+        FROM pois p
+        JOIN poi_categories c ON c.id = p.category_id
+        WHERE p.status = 1
+          AND p.longitude IS NOT NULL
+          AND p.latitude IS NOT NULL
+          AND COALESCE(p.area_code, '') != 'route'
+          AND COALESCE(p.area_code, '') != 'campus_summary'
+        <if test="keyword != null">
+            AND p.name LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+        <if test="category != null">
+            AND c.code = #{category}
+        </if>
+        <if test="placeGroupId != null">
+            AND p.place_group_id = #{placeGroupId}
+        </if>
+        ORDER BY p.place_group_id ASC, p.hotness DESC, p.id ASC
+        LIMIT 300
+    </select>
+
+    <select id="findRouteScopeByPoiId" resultType="long">
+        SELECT COALESCE((
+          SELECT pg.id
+          FROM place_groups pg
+          WHERE pg.name = p.name
+          LIMIT 1
+        ), p.place_group_id)
+        FROM pois p
+        WHERE p.id = #{spotId}
+          AND p.status = 1
+    </select>
+
+    <select id="findPoiById" resultType="com.tourwise.model.RoutePoi">
+        SELECT
+        <include refid="RoutePoiColumns"/>
+        FROM pois p
+        JOIN poi_categories c ON c.id = p.category_id
+        WHERE p.id = #{id}
+          AND p.status = 1
+        <if test="placeGroupId != null">
+            AND p.place_group_id = #{placeGroupId}
+        </if>
+    </select>
+
+    <select id="findPoiByExactName" resultType="com.tourwise.model.RoutePoi">
+        SELECT
+        <include refid="RoutePoiColumns"/>
+        FROM pois p
+        JOIN poi_categories c ON c.id = p.category_id
+        WHERE p.status = 1
+          AND p.name = #{name}
+        <if test="placeGroupId != null">
+            AND p.place_group_id = #{placeGroupId}
+        </if>
+        ORDER BY p.place_group_id ASC, p.hotness DESC, p.id ASC
+        LIMIT 1
+    </select>
+
+    <select id="findPoiByLikeName" resultType="com.tourwise.model.RoutePoi">
+        SELECT
+        <include refid="RoutePoiColumns"/>
+        FROM pois p
+        JOIN poi_categories c ON c.id = p.category_id
+        WHERE p.status = 1
+          AND p.name LIKE CONCAT('%', #{name}, '%')
+        <if test="placeGroupId != null">
+            AND p.place_group_id = #{placeGroupId}
+        </if>
+        ORDER BY p.place_group_id ASC, p.hotness DESC, p.id ASC
+        LIMIT 1
+    </select>
+
+    <select id="findNearestPoi" resultType="com.tourwise.model.RoutePoi">
+        SELECT
+        <include refid="RoutePoiColumns"/>
+        FROM pois p
+        JOIN poi_categories c ON c.id = p.category_id
+        WHERE p.status = 1
+          AND p.longitude IS NOT NULL
+          AND p.latitude IS NOT NULL
+        <if test="placeGroupId != null">
+            AND p.place_group_id = #{placeGroupId}
+        </if>
+        ORDER BY POW(p.latitude - #{latitude}, 2) + POW(p.longitude - #{longitude}, 2) ASC
+        LIMIT 1
+    </select>
+
+    <select id="findNearestSpots" resultType="java.util.Map">
+        SELECT
+          s.id,
+          s.id AS spotId,
+          s.legacy_place_group_id AS placeGroupId,
+          s.name,
+          s.spot_type AS type,
+          s.longitude,
+          s.latitude,
+          COALESCE(s.location_radius_m, 500) AS locationRadiusM,
+          <include refid="DistanceMetersFromInput"/> AS distance
+        FROM spots s
+        WHERE s.status = 1
+          AND s.longitude IS NOT NULL
+          AND s.latitude IS NOT NULL
+        ORDER BY distance ASC, s.id ASC
+        LIMIT 3
+    </select>
+
+    <select id="findNearestInternalPois" resultType="java.util.Map">
+        SELECT
+          p.id,
+          p.id AS poiId,
+          p.place_group_id AS placeGroupId,
+          p.name,
+          c.code AS type,
+          p.longitude,
+          p.latitude,
+          <include refid="DistanceMetersFromInput"/> AS distance
+        FROM pois p
+        JOIN poi_categories c ON c.id = p.category_id
+        WHERE p.status = 1
+          AND p.place_group_id = #{placeGroupId}
+          AND p.longitude IS NOT NULL
+          AND p.latitude IS NOT NULL
+          AND COALESCE(p.area_code, '') != 'route'
+          AND COALESCE(p.area_code, '') != 'campus_summary'
+        ORDER BY distance ASC, p.id ASC
+        LIMIT 3
+    </select>
+
+    <select id="listEdges" resultType="com.tourwise.model.RouteEdge">
+        SELECT
+          e.id,
+          e.from_poi_id AS fromPoiId,
+          e.to_poi_id AS toPoiId,
+          e.distance_m AS distanceM,
+          e.duration_min AS durationMin,
+          e.congestion_factor AS congestionFactor,
+          e.is_indoor AS indoor,
+          e.transport_type AS transportType,
+          e.description
+        FROM route_edges e
+        JOIN pois fp ON fp.id = e.from_poi_id
+        JOIN pois tp ON tp.id = e.to_poi_id
+        WHERE fp.status = 1
+          AND tp.status = 1
+        <if test="placeGroupId != null">
+            AND fp.place_group_id = #{placeGroupId}
+            AND tp.place_group_id = #{placeGroupId}
+        </if>
+        <if test="indoorOnly">
+            AND (e.is_indoor = 1 OR e.transport_type = 'indoor')
+        </if>
+    </select>
+
+    <select id="listGraphPois" resultType="com.tourwise.model.RoutePoi">
+        SELECT
+        <include refid="RoutePoiColumns"/>
+        FROM pois p
+        JOIN poi_categories c ON c.id = p.category_id
+        WHERE p.id IN (
+          SELECT from_poi_id FROM route_edges
+          UNION
+          SELECT to_poi_id FROM route_edges
+        )
+          AND p.status = 1
+        <if test="placeGroupId != null">
+            AND p.place_group_id = #{placeGroupId}
+        </if>
+    </select>
+
+</mapper>

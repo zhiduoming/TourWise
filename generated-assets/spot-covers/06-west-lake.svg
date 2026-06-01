@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <defs>
+    <linearGradient id="bg-westlake" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9bd1e9"/>
+      <stop offset="1" stop-color="#d5e4c8"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="12" stdDeviation="16" flood-opacity="0.22"/></filter>
+    <pattern id="grain-westlake" width="80" height="80" patternUnits="userSpaceOnUse">
+      <circle cx="9" cy="14" r="1" fill="white" opacity="0.08"/><circle cx="47" cy="31" r="1.2" fill="black" opacity="0.05"/><circle cx="68" cy="66" r="1" fill="white" opacity="0.06"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg-westlake)"/>
+  <rect width="1200" height="675" fill="url(#grain-westlake)"/>
+  <polygon points="0,330 190,210 390,330" fill="#669174" opacity="0.92"/><polygon points="220,340 500,190 800,340" fill="#4f8674" opacity="0.96"/><polygon points="710,340 980,218 1200,345" fill="#609176" opacity="0.9"/>
+  <rect x="0" y="350" width="1200" height="325" fill="#8ec2d2" opacity="0.96"/>
+  <g fill="none" stroke="white" stroke-opacity="0.45" stroke-width="3"><path d="M60 410 C300 370 630 370 1140 410"/><path d="M80 485 C340 440 700 440 1120 490"/><path d="M120 560 C410 520 760 520 1110 570"/></g>
+  <g filter="url(#shadow)"><path d="M160 545 C260 420 395 402 520 530" fill="none" stroke="#efe5c7" stroke-width="24" stroke-linecap="round"/><rect x="840" y="318" width="92" height="145" fill="#e9d9bd"/><polygon points="810,318 886,252 964,318" fill="#564237"/><rect x="866" y="462" width="42" height="76" fill="#8b3d35"/></g>
+  <g stroke="#46915c" stroke-width="5" fill="none" opacity="0.8"><path d="M85 170 C40 280 55 415 20 525"/><path d="M105 170 C65 295 80 420 54 540"/><path d="M1090 160 C1050 285 1060 425 1020 540"/><path d="M1115 165 C1090 305 1118 420 1080 552"/></g>
+<rect x="48" y="498" width="1104" height="128" rx="24" fill="rgba(255,255,255,0.82)"/>
+  <text x="84" y="560" font-size="58" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-weight="800" fill="#222936">西湖风景名胜区</text>
+  <text x="88" y="604" font-size="28" font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#566070">湖光山色 · 苏堤春晓 · 江南园林</text>
+</svg>

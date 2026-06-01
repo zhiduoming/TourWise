@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.AdminDashboardMapper">
+
+    <select id="overview" resultType="java.util.Map">
+        SELECT
+          (SELECT COUNT(*) FROM spots WHERE status = 1) AS spot_count,
+          (SELECT COUNT(*) FROM place_groups WHERE COALESCE(route_graph_status, 'none') IN ('draft', 'verified')) AS route_scope_count,
+          (
+            SELECT COUNT(*)
+            FROM pois
+            WHERE status = 1
+              AND COALESCE(area_code, '') != 'route'
+              AND COALESCE(area_code, '') != 'campus_summary'
+          ) AS poi_count,
+          (SELECT COUNT(*) FROM route_edges) AS route_edge_count,
+          (SELECT COUNT(*) FROM users WHERE status = 1) AS user_count,
+          (SELECT COUNT(*) FROM foods WHERE status = 1) AS food_count,
+          (SELECT COUNT(*) FROM travel_logs WHERE status = 1) AS log_count,
+          (SELECT COUNT(*) FROM circles WHERE status = 1) AS circle_count
+    </select>
+
+    <select id="listSpotQuality" resultType="java.util.Map">
+        SELECT
+          s.id AS spot_id,
+          s.legacy_place_group_id AS place_group_id,
+          s.representative_poi_id AS representative_poi_id,
+          s.name,
+          s.spot_type AS spot_type,
+          s.province,
+          s.city,
+          s.status,
+          COALESCE(pg.route_graph_status, 'none') AS route_graph_status,
+          COUNT(DISTINCT vp.id) AS visible_poi_count,
+          COUNT(DISTINCT str.tag_id) AS tag_count,
+          CASE WHEN s.category_id IS NULL THEN 1 ELSE 0 END AS missing_category,
+          CASE WHEN s.cover_image IS NULL OR s.cover_image = '' THEN 1 ELSE 0 END AS missing_cover,
+          CASE WHEN s.longitude IS NULL OR s.latitude IS NULL THEN 1 ELSE 0 END AS missing_geo,
+          CASE WHEN s.short_name IS NULL OR s.short_name = '' THEN 1 ELSE 0 END AS missing_short_name,
+          CASE WHEN s.description IS NULL OR s.description = '' THEN 1 ELSE 0 END AS missing_description,
+          CASE WHEN s.address IS NULL OR s.address = '' THEN 1 ELSE 0 END AS missing_address,
+          CASE WHEN COUNT(DISTINCT str.tag_id) = 0 THEN 1 ELSE 0 END AS missing_tags,
+          CASE WHEN s.representative_poi_id IS NULL OR rp.id IS NULL THEN 1 ELSE 0 END AS missing_representative_poi,
+          CASE WHEN rp.id IS NOT NULL AND rp.status != 1 THEN 1 ELSE 0 END AS representative_poi_disabled,
+          CASE WHEN COUNT(DISTINCT vp.id) = 0 THEN 1 ELSE 0 END AS missing_visible_poi,
+          CASE
+            WHEN s.spot_type IN ('campus', 'university')
+             AND COALESCE(pg.route_graph_status, 'none') = 'none'
+            THEN 1 ELSE 0
+          END AS campus_route_missing
+        FROM spots s
+        LEFT JOIN place_groups pg ON pg.id = s.legacy_place_group_id
+        LEFT JOIN pois rp ON rp.id = s.representative_poi_id
+        LEFT JOIN pois vp
+          ON vp.spot_id = s.id
+          AND vp.status = 1
+          AND COALESCE(vp.area_code, '') NOT IN ('route', 'campus_summary', 'spot_summary')
+        LEFT JOIN spot_tag_relations str ON str.spot_id = s.id
+        WHERE s.status = 1
+        GROUP BY s.id, s.legacy_place_group_id, s.representative_poi_id, s.name, s.spot_type,
+                 s.province, s.city, s.status, pg.route_graph_status, s.category_id,
+                 s.cover_image, s.longitude, s.latitude, s.short_name, s.description,
+                 s.address, rp.id, rp.status
+        ORDER BY
+          (missing_representative_poi + representative_poi_disabled + missing_geo + missing_visible_poi + campus_route_missing) DESC,
+          (missing_cover + missing_category + missing_short_name + missing_description + missing_address + missing_tags) DESC,
+          s.id ASC
+        LIMIT 80
+    </select>
+
+    <select id="listRouteGraphScopes" resultType="java.util.Map">
+        SELECT
+          pg.id AS place_group_id,
+          pg.name,
+          COALESCE(pg.route_graph_status, 'none') AS route_graph_status,
+          COUNT(DISTINCT pgm.id) AS map_count,
+          MAX(pgm.map_width) AS map_width,
+          MAX(pgm.map_height) AS map_height
+        FROM place_groups pg
+        LEFT JOIN place_group_maps pgm ON pgm.place_group_id = pg.id
+        WHERE COALESCE(pg.route_graph_status, 'none') IN ('draft', 'verified')
+        GROUP BY pg.id, pg.name, pg.route_graph_status
+        ORDER BY pg.id ASC
+    </select>
+
+    <select id="listQualityNodes" resultType="com.tourwise.model.RouteGraphNodeRecord">
+        SELECT
+          p.id,
+          p.spot_id AS spotId,
+          p.place_group_id AS placeGroupId,
+          p.name,
+          c.code AS categoryCode,
+          c.name AS categoryName,
+          p.area_code AS areaCode,
+          p.area_name AS areaName,
+          p.longitude,
+          p.latitude,
+          p.map_x AS mapX,
+          p.map_y AS mapY
+        FROM pois p
+        JOIN poi_categories c ON c.id = p.category_id
+        WHERE p.place_group_id = #{placeGroupId}
+          AND p.status = 1
+          AND COALESCE(p.area_code, '') != 'campus_summary'
+        ORDER BY
+          CASE WHEN p.area_code = 'route' THEN 2 ELSE 1 END,
+          p.id ASC
+    </select>
+
+    <select id="listQualityEdges" resultType="com.tourwise.model.RouteGraphEdgeRecord">
+        SELECT
+          e.id,
+          e.from_poi_id AS fromPoiId,
+          e.to_poi_id AS toPoiId,
+          e.distance_m AS distanceM,
+          e.duration_min AS durationMin,
+          e.transport_type AS transportType,
+          e.is_indoor AS indoor,
+          e.description
+        FROM route_edges e
+        LEFT JOIN pois fp ON fp.id = e.from_poi_id
+        LEFT JOIN pois tp ON tp.id = e.to_poi_id
+        WHERE fp.place_group_id = #{placeGroupId}
+          AND tp.place_group_id = #{placeGroupId}
+          AND fp.status = 1
+          AND tp.status = 1
+        ORDER BY e.id ASC
+    </select>
+
+</mapper>

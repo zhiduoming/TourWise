@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.CircleMapper">
+
+    <sql id="CircleSelectColumns">
+        c.id,
+        c.name,
+        c.description,
+        c.cover_url AS cover,
+        c.owner_id,
+        COALESCE(owner_profile.nickname, owner_user.username) AS ownerName,
+        c.status,
+        c.created_at,
+        COUNT(DISTINCT cm.user_id) AS members,
+        COUNT(DISTINCT l.id) AS posts,
+        COUNT(DISTINCT l.id) AS logs,
+        CASE WHEN my_cm.user_id IS NULL THEN 0 ELSE 1 END AS is_member
+    </sql>
+
+    <sql id="CircleFromClause">
+        FROM circles c
+        LEFT JOIN circle_members cm ON cm.circle_id = c.id
+        LEFT JOIN travel_logs l ON l.circle_id = c.id AND l.status = 1
+        LEFT JOIN users owner_user ON owner_user.id = c.owner_id
+        LEFT JOIN user_profiles owner_profile ON owner_profile.user_id = owner_user.id
+        LEFT JOIN circle_members my_cm
+          ON my_cm.circle_id = c.id
+         AND my_cm.user_id = #{currentUserId}
+    </sql>
+
+    <sql id="AdminCircleFilter">
+        WHERE 1 = 1
+        <if test="keyword != null">
+            AND (c.name LIKE CONCAT('%', #{keyword}, '%')
+                 OR c.description LIKE CONCAT('%', #{keyword}, '%')
+                 OR owner_user.username LIKE CONCAT('%', #{keyword}, '%')
+                 OR owner_profile.nickname LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="status != null">
+            AND c.status = #{status}
+        </if>
+    </sql>
+
+    <select id="list" resultType="java.util.Map">
+        SELECT
+        <include refid="CircleSelectColumns"/>
+        <include refid="CircleFromClause"/>
+        WHERE c.status = 1
+        <if test="keyword != null">
+            AND (c.name LIKE CONCAT('%', #{keyword}, '%')
+                 OR c.description LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        GROUP BY c.id, c.name, c.description, c.cover_url, c.owner_id, owner_profile.nickname,
+                 owner_user.username, c.status, c.created_at, my_cm.user_id
+        ORDER BY members DESC, posts DESC, c.id ASC
+    </select>
+
+    <select id="adminList" resultType="java.util.Map">
+        SELECT
+        <include refid="CircleSelectColumns"/>
+        <include refid="CircleFromClause"/>
+        <include refid="AdminCircleFilter"/>
+        GROUP BY c.id, c.name, c.description, c.cover_url, c.owner_id, owner_profile.nickname,
+                 owner_user.username, c.status, c.created_at, my_cm.user_id
+        ORDER BY c.status DESC, members DESC, posts DESC, c.id ASC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="adminCount" resultType="long">
+        SELECT COUNT(*)
+        FROM circles c
+        LEFT JOIN users owner_user ON owner_user.id = c.owner_id
+        LEFT JOIN user_profiles owner_profile ON owner_profile.user_id = owner_user.id
+        <include refid="AdminCircleFilter"/>
+    </select>
+
+    <select id="findById" resultType="java.util.Map">
+        SELECT
+        <include refid="CircleSelectColumns"/>
+        <include refid="CircleFromClause"/>
+        WHERE c.id = #{id}
+          AND c.status = 1
+        GROUP BY c.id, c.name, c.description, c.cover_url, c.owner_id, owner_profile.nickname,
+                 owner_user.username, c.status, c.created_at, my_cm.user_id
+    </select>
+
+    <select id="adminFindById" resultType="java.util.Map">
+        SELECT
+        <include refid="CircleSelectColumns"/>
+        <include refid="CircleFromClause"/>
+        WHERE c.id = #{id}
+        GROUP BY c.id, c.name, c.description, c.cover_url, c.owner_id, owner_profile.nickname,
+                 owner_user.username, c.status, c.created_at, my_cm.user_id
+    </select>
+
+    <select id="listMembers" resultType="java.util.Map">
+        SELECT
+          cm.user_id,
+          cm.role,
+          cm.joined_at,
+          COALESCE(up.nickname, u.username) AS username,
+          up.avatar_url AS avatar
+        FROM circle_members cm
+        JOIN users u ON u.id = cm.user_id
+        LEFT JOIN user_profiles up ON up.user_id = u.id
+        WHERE cm.circle_id = #{circleId}
+        ORDER BY cm.role DESC, cm.joined_at ASC
+    </select>
+
+    <select id="exists" resultType="int">
+        SELECT COUNT(*)
+        FROM circles
+        WHERE id = #{id}
+          AND status = 1
+    </select>
+
+    <select id="existsAny" resultType="int">
+        SELECT COUNT(*)
+        FROM circles
+        WHERE id = #{id}
+    </select>
+
+    <select id="ownerId" resultType="long">
+        SELECT owner_id
+        FROM circles
+        WHERE id = #{id}
+          AND status = 1
+    </select>
+
+    <select id="isMember" resultType="int">
+        SELECT COUNT(*)
+        FROM circle_members
+        WHERE circle_id = #{circleId}
+          AND user_id = #{userId}
+    </select>
+
+    <insert id="insert" parameterType="com.tourwise.model.CircleRecord" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO circles (name, description, cover_url, owner_id)
+        VALUES (#{name}, #{description}, #{coverUrl}, #{ownerId})
+    </insert>
+
+    <insert id="insertMember">
+        INSERT IGNORE INTO circle_members (circle_id, user_id, role)
+        VALUES (#{circleId}, #{userId}, #{role})
+    </insert>
+
+    <delete id="deleteMember">
+        DELETE FROM circle_members
+        WHERE circle_id = #{circleId}
+          AND user_id = #{userId}
+    </delete>
+
+    <update id="updateByAdmin">
+        UPDATE circles
+        SET
+          name = #{request.name},
+          description = #{request.description},
+          cover_url = #{request.cover}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateStatusByAdmin">
+        UPDATE circles
+        SET status = #{status}
+        WHERE id = #{id}
+    </update>
+
+</mapper>

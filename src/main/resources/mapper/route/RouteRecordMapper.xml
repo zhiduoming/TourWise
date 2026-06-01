@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.RouteRecordMapper">
+
+    <insert id="insertRecord" parameterType="com.tourwise.model.RouteRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO route_records
+          (user_id, route_name, mode, total_distance_m, total_duration_min, preferences)
+        VALUES
+          (#{userId}, #{routeName}, #{mode}, #{totalDistanceM}, #{totalDurationMin}, CAST(#{preferences} AS JSON))
+    </insert>
+
+    <insert id="insertPoint" parameterType="com.tourwise.model.RouteRecordPoint"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO route_record_points
+          (route_record_id, poi_id, point_name, sort_order, distance_from_start_m, description)
+        VALUES
+          (#{routeRecordId}, #{poiId}, #{pointName}, #{sortOrder}, #{distanceFromStartM}, #{description})
+    </insert>
+
+    <select id="listRecords" resultType="java.util.Map">
+        SELECT
+          id,
+          route_name AS routeName,
+          mode,
+          total_distance_m AS totalDistanceM,
+          total_duration_min AS totalDurationMin,
+          preferences,
+          created_at AS createdAt
+        FROM route_records
+        WHERE user_id = #{userId}
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="findRecordById" resultType="java.util.Map">
+        SELECT
+          id,
+          route_name AS routeName,
+          mode,
+          total_distance_m AS totalDistanceM,
+          total_duration_min AS totalDurationMin,
+          preferences,
+          created_at AS createdAt
+        FROM route_records
+        WHERE id = #{id}
+          AND user_id = #{userId}
+    </select>
+
+    <select id="countRecords" resultType="long">
+        SELECT COUNT(*)
+        FROM route_records
+        WHERE user_id = #{userId}
+    </select>
+
+    <select id="listPoints" resultType="java.util.Map">
+        SELECT
+          id,
+          poi_id AS poiId,
+          point_name AS pointName,
+          sort_order AS sortOrder,
+          distance_from_start_m AS distanceFromStartM,
+          description
+        FROM route_record_points
+        WHERE route_record_id = #{recordId}
+        ORDER BY sort_order ASC, id ASC
+    </select>
+
+    <delete id="deleteRecord">
+        DELETE FROM route_records
+        WHERE id = #{id}
+          AND user_id = #{userId}
+    </delete>
+
+</mapper>

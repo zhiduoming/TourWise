@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.UserSpotActionMapper">
+
+    <sql id="ActionPoiColumns">
+        p.id,
+        p.name,
+        c.code AS type,
+        c.name AS typeName,
+        c.code AS category,
+        c.name AS categoryName,
+        p.description,
+        p.location_text AS location,
+        p.area_code AS area,
+        p.area_name AS areaName,
+        p.address,
+        COALESCE(p.province, pg.city) AS province,
+        COALESCE(p.city, pg.city) AS city,
+        p.image_url AS image,
+        p.longitude,
+        p.latitude,
+        DATE_FORMAT(p.open_time, '%H:%i') AS openTime,
+        DATE_FORMAT(p.close_time, '%H:%i') AS closeTime,
+        p.phone,
+        p.rating,
+        p.rating AS score,
+        p.hotness,
+        p.visit_count AS visits,
+        pg.id AS placeGroupId,
+        pg.name AS placeGroupName,
+        pg.short_name AS shortName,
+        pg.district,
+        0 AS distance
+    </sql>
+
+    <select id="existsPoi" resultType="int">
+        SELECT COUNT(*)
+        FROM pois
+        WHERE id = #{targetId}
+          AND status = 1
+    </select>
+
+    <select id="existsFavorite" resultType="int">
+        SELECT COUNT(*)
+        FROM favorites
+        WHERE user_id = #{userId}
+          AND target_type = #{targetType}
+          AND target_id = #{targetId}
+    </select>
+
+    <insert id="insertFavorite">
+        INSERT IGNORE INTO favorites (user_id, target_type, target_id)
+        VALUES (#{userId}, #{targetType}, #{targetId})
+    </insert>
+
+    <delete id="deleteFavorite">
+        DELETE FROM favorites
+        WHERE user_id = #{userId}
+          AND target_type = #{targetType}
+          AND target_id = #{targetId}
+    </delete>
+
+    <select id="findActionActive" resultType="int">
+        SELECT active
+        FROM user_spot_actions
+        WHERE user_id = #{userId}
+          AND target_type = #{targetType}
+          AND target_id = #{targetId}
+          AND action_type = #{actionType}
+        LIMIT 1
+    </select>
+
+    <insert id="upsertAction">
+        INSERT INTO user_spot_actions (user_id, target_type, target_id, action_type, active)
+        VALUES (#{userId}, #{targetType}, #{targetId}, #{actionType}, #{active})
+        ON DUPLICATE KEY UPDATE
+          active = VALUES(active),
+          updated_at = NOW()
+    </insert>
+
+    <insert id="insertBrowsingHistory">
+        INSERT INTO browsing_history (user_id, target_type, target_id)
+        VALUES (#{userId}, #{targetType}, #{targetId})
+    </insert>
+
+    <insert id="upsertPreferenceFromPoi">
+        INSERT INTO user_preferences (user_id, tag_id, source, weight)
+        SELECT DISTINCT
+          #{userId},
+          str.tag_id,
+          #{source},
+          #{weight}
+        FROM pois p
+        JOIN spots s
+          ON s.id = p.spot_id
+          OR s.representative_poi_id = p.id
+          OR s.legacy_poi_id = p.id
+        JOIN spot_tag_relations str ON str.spot_id = s.id
+        WHERE p.id = #{targetId}
+          AND p.status = 1
+          AND s.status = 1
+        ON DUPLICATE KEY UPDATE
+          weight = GREATEST(-10.00, LEAST(10.00, weight + VALUES(weight))),
+          updated_at = NOW()
+    </insert>
+
+    <update id="incrementPoiVisit">
+        UPDATE pois
+        SET visit_count = visit_count + 1,
+            hotness = hotness + 1
+        WHERE id = #{targetId}
+    </update>
+
+    <update id="incrementSpotVisitByPoi">
+        UPDATE spots s
+        JOIN pois p ON p.id = #{targetId}
+        SET s.visit_count = s.visit_count + 1,
+            s.hotness = s.hotness + 1
+        WHERE s.id = p.spot_id
+           OR s.representative_poi_id = p.id
+    </update>
+
+    <select id="listUserActionPois" resultType="java.util.Map">
+        SELECT
+        <include refid="ActionPoiColumns"/>
+        FROM user_spot_actions a
+        JOIN pois p ON p.id = a.target_id
+        JOIN poi_categories c ON c.id = p.category_id
+        LEFT JOIN place_groups pg ON pg.id = p.place_group_id
+        WHERE a.user_id = #{userId}
+          AND a.target_type = 'poi'
+          AND a.action_type = #{actionType}
+          AND a.active = 1
+          AND p.status = 1
+        ORDER BY a.updated_at DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countUserActionPois" resultType="long">
+        SELECT COUNT(*)
+        FROM user_spot_actions a
+        JOIN pois p ON p.id = a.target_id
+        WHERE a.user_id = #{userId}
+          AND a.target_type = 'poi'
+          AND a.action_type = #{actionType}
+          AND a.active = 1
+          AND p.status = 1
+    </select>
+
+    <select id="listFavoritePois" resultType="java.util.Map">
+        SELECT
+        <include refid="ActionPoiColumns"/>
+        FROM favorites f
+        JOIN pois p ON p.id = f.target_id
+        JOIN poi_categories c ON c.id = p.category_id
+        LEFT JOIN place_groups pg ON pg.id = p.place_group_id
+        WHERE f.user_id = #{userId}
+          AND f.target_type = 'poi'
+          AND p.status = 1
+        ORDER BY f.created_at DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countFavoritePois" resultType="long">
+        SELECT COUNT(*)
+        FROM favorites f
+        JOIN pois p ON p.id = f.target_id
+        WHERE f.user_id = #{userId}
+          AND f.target_type = 'poi'
+          AND p.status = 1
+    </select>
+
+    <select id="listBrowsingPois" resultType="java.util.Map">
+        SELECT
+        <include refid="ActionPoiColumns"/>
+        FROM (
+          SELECT target_id, MAX(created_at) AS last_view_at
+          FROM browsing_history
+          WHERE user_id = #{userId}
+            AND target_type = 'poi'
+          GROUP BY target_id
+        ) h
+        JOIN pois p ON p.id = h.target_id
+        JOIN poi_categories c ON c.id = p.category_id
+        LEFT JOIN place_groups pg ON pg.id = p.place_group_id
+        WHERE p.status = 1
+        ORDER BY h.last_view_at DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countBrowsingPois" resultType="long">
+        SELECT COUNT(DISTINCT h.target_id)
+        FROM browsing_history h
+        JOIN pois p ON p.id = h.target_id
+        WHERE h.user_id = #{userId}
+          AND h.target_type = 'poi'
+          AND p.status = 1
+    </select>
+
+</mapper>

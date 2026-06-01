@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.UserMapper">
+
+    <select id="findAccountByUsernameOrPhone" resultType="com.tourwise.model.UserAccount">
+        SELECT
+          id,
+          username,
+          phone,
+          password_hash AS passwordHash,
+          status,
+          role
+        FROM users
+        WHERE username = #{account}
+           OR phone = #{account}
+        LIMIT 1
+    </select>
+
+    <select id="existsByUsername" resultType="int">
+        SELECT COUNT(*)
+        FROM users
+        WHERE username = #{username}
+    </select>
+
+    <select id="existsByPhone" resultType="int">
+        SELECT COUNT(*)
+        FROM users
+        WHERE phone = #{phone}
+    </select>
+
+    <insert id="insertUser" parameterType="com.tourwise.model.UserAccount" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO users (username, phone, password_hash)
+        VALUES (#{username}, #{phone}, #{passwordHash})
+    </insert>
+
+    <insert id="insertProfile">
+        INSERT INTO user_profiles (user_id, nickname, avatar_url)
+        VALUES (#{userId}, #{nickname}, #{avatar})
+    </insert>
+
+    <update id="updateLastLoginAt">
+        UPDATE users
+        SET last_login_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <select id="findUserSummary" resultType="java.util.Map">
+        SELECT
+          u.id,
+          u.username,
+          p.nickname,
+          p.avatar_url AS avatar,
+          p.signature,
+          u.phone,
+          u.role
+        FROM users u
+        LEFT JOIN user_profiles p ON p.user_id = u.id
+        WHERE u.id = #{id}
+          AND u.status = 1
+    </select>
+
+    <select id="findPublicUser" resultType="java.util.Map">
+        SELECT
+          u.id,
+          u.username,
+          COALESCE(p.nickname, u.username) AS nickname,
+          p.avatar_url AS avatar,
+          p.signature,
+          p.visit_count AS visits,
+          u.role
+        FROM users u
+        LEFT JOIN user_profiles p ON p.user_id = u.id
+        WHERE u.id = #{id}
+          AND u.status = 1
+    </select>
+
+    <select id="findProfile" resultType="java.util.Map">
+        SELECT
+          u.id,
+          u.username,
+          COALESCE(p.nickname, u.username) AS nickname,
+          p.avatar_url AS avatar,
+          p.signature,
+          u.phone,
+          p.email,
+          p.gender,
+          p.birthday,
+          u.created_at AS createdAt,
+          u.last_login_at AS lastLoginAt,
+          u.role,
+          p.visit_count AS visits,
+          (SELECT COUNT(*) FROM favorites f WHERE f.user_id = u.id) AS favorites
+        FROM users u
+        LEFT JOIN user_profiles p ON p.user_id = u.id
+        WHERE u.id = #{id}
+          AND u.status = 1
+    </select>
+
+    <select id="listPreferenceTags" resultType="java.util.Map">
+        SELECT
+          t.id AS tagId,
+          t.name AS tagName,
+          t.tag_type AS tagType,
+          ROUND(SUM(up.weight), 2) AS weight,
+          COUNT(*) AS sourceCount,
+          GROUP_CONCAT(
+            CONCAT(up.source, ':', ROUND(up.weight, 2))
+            ORDER BY up.weight DESC, up.source ASC
+            SEPARATOR ','
+          ) AS sourceSummary,
+          MAX(up.updated_at) AS updatedAt
+        FROM user_preferences up
+        JOIN tags t ON t.id = up.tag_id
+        WHERE up.user_id = #{userId}
+        GROUP BY t.id, t.name, t.tag_type
+        ORDER BY weight DESC, updatedAt DESC, t.id ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="listPreferenceSources" resultType="java.util.Map">
+        SELECT
+          up.source,
+          ROUND(SUM(up.weight), 2) AS weight,
+          COUNT(*) AS count,
+          MAX(up.updated_at) AS updatedAt
+        FROM user_preferences up
+        WHERE up.user_id = #{userId}
+        GROUP BY up.source
+        ORDER BY weight DESC, updatedAt DESC
+    </select>
+
+    <select id="preferenceSummary" resultType="java.util.Map">
+        SELECT
+          COALESCE(ROUND(SUM(up.weight), 2), 0) AS totalWeight,
+          COUNT(DISTINCT up.tag_id) AS tagCount,
+          COUNT(*) AS signalCount,
+          MAX(up.updated_at) AS lastUpdatedAt
+        FROM user_preferences up
+        WHERE up.user_id = #{userId}
+    </select>
+
+    <select id="findRoleById" resultType="string">
+        SELECT role
+        FROM users
+        WHERE id = #{id}
+          AND status = 1
+    </select>
+
+    <update id="updateProfile">
+        UPDATE user_profiles
+        SET nickname = COALESCE(#{nickname}, nickname),
+            signature = COALESCE(#{signature}, signature),
+            gender = #{gender},
+            birthday = #{birthday}
+        WHERE user_id = #{userId}
+    </update>
+
+    <update id="updateAvatar">
+        UPDATE user_profiles
+        SET avatar_url = #{avatar}
+        WHERE user_id = #{userId}
+    </update>
+
+</mapper>

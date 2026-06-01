@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.FoodMapper">
+
+    <sql id="FoodListColumns">
+        f.id,
+        f.name,
+        f.image_url AS image,
+        f.description,
+        f.rating AS score,
+        f.rating AS rating,
+        f.price_level AS priceLevel,
+        f.avg_price AS avgPrice,
+        0 AS distance,
+        f.cuisine_code AS cuisine,
+        f.cuisine_name AS cuisineName,
+        f.cuisine_name AS cuisine_type,
+        CASE WHEN f.rating >= 4.5 OR f.hotness >= 500 THEN true ELSE false END AS recommend,
+        f.address,
+        DATE_FORMAT(f.open_time, '%H:%i') AS openTime,
+        DATE_FORMAT(f.close_time, '%H:%i') AS closeTime,
+        f.phone,
+        f.hotness,
+        COALESCE(s.id, p.id) AS spot_id,
+        COALESCE(s.name, p.name) AS spot_name
+    </sql>
+
+    <select id="list" resultType="java.util.Map">
+        SELECT
+        <include refid="FoodListColumns"/>
+        FROM foods f
+        LEFT JOIN pois p ON p.id = f.poi_id
+        LEFT JOIN spots s ON s.id = p.spot_id
+        LEFT JOIN pois current_p ON current_p.id = #{spotId}
+        LEFT JOIN spots current_s ON current_s.id = #{spotId}
+        WHERE f.status = 1
+        <if test="cuisine != null">
+            AND f.cuisine_code = #{cuisine}
+        </if>
+        <if test="priceLevel != null">
+            AND f.price_level = #{priceLevel}
+        </if>
+        <if test="poiId != null">
+            AND f.poi_id = #{poiId}
+        </if>
+        <if test="spotId != null or placeGroupId != null">
+            AND (
+              <trim prefixOverrides="OR">
+                <if test="spotId != null">
+                    OR f.poi_id = #{spotId}
+                    OR p.spot_id = #{spotId}
+                    OR p.spot_id = current_p.spot_id
+                    OR p.place_group_id = current_p.place_group_id
+                    OR p.spot_id = current_s.id
+                    OR p.place_group_id = current_s.legacy_place_group_id
+                </if>
+                <if test="placeGroupId != null">
+                    OR p.place_group_id = #{placeGroupId}
+                </if>
+              </trim>
+            )
+        </if>
+        <choose>
+            <when test="sort == 'popular'">
+                ORDER BY f.hotness DESC, f.rating DESC, f.id ASC
+            </when>
+            <when test="sort == 'distance'">
+                ORDER BY distance ASC, f.rating DESC, f.hotness DESC, f.id ASC
+            </when>
+            <otherwise>
+                ORDER BY f.rating DESC, f.hotness DESC, f.id ASC
+            </otherwise>
+        </choose>
+        LIMIT #{limit}
+    </select>
+
+    <select id="detail" resultType="java.util.Map">
+        SELECT
+          f.id,
+          f.name,
+          f.image_url AS image,
+          f.description,
+          f.cuisine_code AS cuisine,
+          f.cuisine_name AS cuisineName,
+          f.cuisine_name AS cuisine_type,
+          f.rating AS score,
+          f.rating AS rating,
+          f.hotness,
+          f.price_level AS priceLevel,
+          f.avg_price AS avgPrice,
+          f.address,
+          DATE_FORMAT(f.open_time, '%H:%i') AS openTime,
+          DATE_FORMAT(f.close_time, '%H:%i') AS closeTime,
+          f.phone,
+          COALESCE(s.id, p.id) AS spot_id,
+          COALESCE(s.name, p.name) AS spot_name
+        FROM foods f
+        LEFT JOIN pois p ON p.id = f.poi_id
+        LEFT JOIN spots s ON s.id = p.spot_id
+        WHERE f.id = #{id}
+          AND f.status = 1
+    </select>
+
+    <select id="recommend" resultType="java.util.Map">
+        SELECT
+          f.id,
+          f.name,
+          f.image_url AS image,
+          f.description,
+          f.rating AS score,
+          f.rating AS rating,
+          f.hotness,
+          f.cuisine_code AS cuisine,
+          f.cuisine_name AS cuisineName,
+          f.price_level AS priceLevel
+        FROM foods f
+        WHERE f.status = 1
+        ORDER BY f.rating DESC, f.hotness DESC, f.id ASC
+        LIMIT 10
+    </select>
+
+    <select id="exists" resultType="int">
+        SELECT COUNT(*)
+        FROM foods
+        WHERE id = #{id}
+          AND status = 1
+    </select>
+
+    <insert id="insertReview" parameterType="com.tourwise.model.FoodReviewRecord" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO food_reviews (food_id, user_id, rating, content)
+        VALUES (#{foodId}, #{userId}, #{rating}, #{content})
+    </insert>
+
+    <update id="refreshRating">
+        UPDATE foods
+        SET rating = (
+          SELECT ROUND(AVG(fr.rating), 1)
+          FROM food_reviews fr
+          WHERE fr.food_id = #{foodId}
+            AND fr.rating IS NOT NULL
+        )
+        WHERE id = #{foodId}
+          AND EXISTS (
+            SELECT 1
+            FROM food_reviews fr
+            WHERE fr.food_id = #{foodId}
+              AND fr.rating IS NOT NULL
+          )
+    </update>
+
+</mapper>

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <defs>
+    <linearGradient id="bg-disney" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#73bbff"/>
+      <stop offset="1" stop-color="#f6ca8d"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="12" stdDeviation="16" flood-opacity="0.22"/></filter>
+    <pattern id="grain-disney" width="80" height="80" patternUnits="userSpaceOnUse">
+      <circle cx="9" cy="14" r="1" fill="white" opacity="0.08"/><circle cx="47" cy="31" r="1.2" fill="black" opacity="0.05"/><circle cx="68" cy="66" r="1" fill="white" opacity="0.06"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg-disney)"/>
+  <rect width="1200" height="675" fill="url(#grain-disney)"/>
+  <g opacity="0.9"><ellipse cx="170" cy="110" rx="90" ry="34" fill="white"/><ellipse cx="235" cy="94" rx="70" ry="32" fill="white"/><ellipse cx="850" cy="105" rx="120" ry="38" fill="white"/><ellipse cx="930" cy="82" rx="70" ry="30" fill="white"/></g>
+  <g filter="url(#shadow)">
+    <rect x="398" y="348" width="404" height="190" rx="10" fill="#ead9c5"/>
+    <rect x="330" y="305" width="92" height="250" fill="#ead9c5"/><polygon points="310,305 376,198 442,305" fill="#5472b4"/>
+    <rect x="455" y="245" width="82" height="310" fill="#ead9c5"/><polygon points="438,245 496,138 554,245" fill="#5472b4"/>
+    <rect x="560" y="190" width="96" height="365" fill="#ead9c5"/><polygon points="538,190 608,64 680,190" fill="#5472b4"/>
+    <rect x="688" y="254" width="82" height="300" fill="#ead9c5"/><polygon points="670,254 730,148 788,254" fill="#5472b4"/>
+    <rect x="805" y="325" width="90" height="230" fill="#ead9c5"/><polygon points="785,325 850,226 915,325" fill="#5472b4"/>
+    <rect x="355" y="520" width="510" height="70" fill="#dfc6ac"/>
+    <path d="M492 550 Q600 420 708 550" fill="none" stroke="#6e5140" stroke-width="16"/>
+    <g fill="#5579b3"><rect x="430" y="384" width="26" height="82" rx="13"/><rect x="486" y="334" width="24" height="90" rx="12"/><rect x="604" y="280" width="28" height="110" rx="14"/><rect x="705" y="350" width="24" height="84" rx="12"/></g>
+  </g>
+  <g fill="#348f4a" opacity="0.92"><ellipse cx="110" cy="570" rx="85" ry="65"/><ellipse cx="208" cy="590" rx="90" ry="62"/><ellipse cx="1000" cy="578" rx="110" ry="72"/><ellipse cx="1095" cy="600" rx="85" ry="52"/></g>
+<rect x="48" y="498" width="1104" height="128" rx="24" fill="rgba(255,255,255,0.82)"/>
+  <text x="84" y="560" font-size="58" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-weight="800" fill="#222936">迪士尼乐园(上海)</text>
+  <text x="88" y="604" font-size="28" font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#566070">童话城堡 · 主题巡游 · 亲子度假</text>
+</svg>

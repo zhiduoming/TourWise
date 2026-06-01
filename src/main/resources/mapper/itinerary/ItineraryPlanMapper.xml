@@ -1,0 +1,352 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.ItineraryPlanMapper">
+
+    <insert id="insertPlan" parameterType="com.tourwise.model.ItineraryPlanRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO itinerary_plans
+          (user_id, source_plan_id, title, city, duration, pace, total_days, spot_count, summary, preferences_json, status)
+        VALUES
+          (#{userId}, #{sourcePlanId}, #{title}, #{city}, #{duration}, #{pace}, #{totalDays}, #{spotCount}, #{summary},
+           CAST(#{preferencesJson} AS JSON), 1)
+    </insert>
+
+    <insert id="insertItem" parameterType="com.tourwise.model.ItineraryPlanItemRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO itinerary_plan_items
+          (plan_id, day_no, order_no, item_type, time_slot, target_id, spot_id, place_group_id,
+           name, description, address, image_url, rating, hotness, longitude, latitude, recommend_reason)
+        VALUES
+          (#{planId}, #{dayNo}, #{orderNo}, #{itemType}, #{timeSlot}, #{targetId}, #{spotId}, #{placeGroupId},
+           #{name}, #{description}, #{address}, #{imageUrl}, #{rating}, #{hotness}, #{longitude}, #{latitude}, #{recommendReason})
+    </insert>
+
+    <select id="listPlans" resultType="java.util.Map">
+        SELECT
+          id,
+          title,
+          city,
+          duration,
+          pace,
+          total_days AS totalDays,
+          spot_count AS spotCount,
+          copy_count AS copyCount,
+          favorite_count AS favoriteCount,
+          EXISTS (
+            SELECT 1
+            FROM itinerary_plan_favorites f
+            WHERE f.plan_id = itinerary_plans.id
+              AND f.user_id = #{userId}
+          ) AS favorited,
+          summary,
+          preferences_json AS preferencesJson,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM itinerary_plans
+        WHERE user_id = #{userId}
+          AND status = 1
+        ORDER BY updated_at DESC, id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countPlans" resultType="long">
+        SELECT COUNT(*)
+        FROM itinerary_plans
+        WHERE user_id = #{userId}
+          AND status = 1
+    </select>
+
+    <select id="listFavoritePlans" resultType="java.util.Map">
+        SELECT
+          ip.id,
+          ip.title,
+          ip.city,
+          ip.duration,
+          ip.pace,
+          ip.total_days AS totalDays,
+          ip.spot_count AS spotCount,
+          ip.copy_count AS copyCount,
+          ip.favorite_count AS favoriteCount,
+          1 AS favorited,
+          ip.source_plan_id AS sourcePlanId,
+          sp.title AS sourcePlanTitle,
+          up.nickname AS ownerName,
+          ip.summary,
+          ip.preferences_json AS preferencesJson,
+          ip.created_at AS createdAt,
+          ip.updated_at AS updatedAt,
+          f.created_at AS favoritedAt
+        FROM itinerary_plan_favorites f
+        JOIN itinerary_plans ip
+          ON ip.id = f.plan_id
+         AND ip.status = 1
+        LEFT JOIN itinerary_plans sp
+          ON sp.id = ip.source_plan_id
+        LEFT JOIN user_profiles up
+          ON up.user_id = ip.user_id
+        WHERE f.user_id = #{userId}
+          AND (
+            ip.user_id = #{userId}
+            OR EXISTS (
+              SELECT 1
+              FROM travel_logs l
+              JOIN circles c
+                ON c.id = l.circle_id
+               AND c.status = 1
+              JOIN circle_members cm
+                ON cm.circle_id = c.id
+               AND cm.user_id = #{userId}
+              WHERE l.itinerary_plan_id = ip.id
+                AND l.status = 1
+            )
+          )
+        ORDER BY f.created_at DESC, ip.updated_at DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countFavoritePlans" resultType="long">
+        SELECT COUNT(*)
+        FROM itinerary_plan_favorites f
+        JOIN itinerary_plans ip
+          ON ip.id = f.plan_id
+         AND ip.status = 1
+        WHERE f.user_id = #{userId}
+          AND (
+            ip.user_id = #{userId}
+            OR EXISTS (
+              SELECT 1
+              FROM travel_logs l
+              JOIN circles c
+                ON c.id = l.circle_id
+               AND c.status = 1
+              JOIN circle_members cm
+                ON cm.circle_id = c.id
+               AND cm.user_id = #{userId}
+              WHERE l.itinerary_plan_id = ip.id
+                AND l.status = 1
+            )
+          )
+    </select>
+
+    <select id="findPlanById" resultType="java.util.Map">
+        SELECT
+          id,
+          title,
+          city,
+          duration,
+          pace,
+          total_days AS totalDays,
+          spot_count AS spotCount,
+          copy_count AS copyCount,
+          favorite_count AS favoriteCount,
+          EXISTS (
+            SELECT 1
+            FROM itinerary_plan_favorites f
+            WHERE f.plan_id = itinerary_plans.id
+              AND f.user_id = #{userId}
+          ) AS favorited,
+          source_plan_id AS sourcePlanId,
+          summary,
+          preferences_json AS preferencesJson,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM itinerary_plans
+        WHERE id = #{id}
+          AND user_id = #{userId}
+          AND status = 1
+    </select>
+
+    <select id="findAccessiblePlanById" resultType="java.util.Map">
+        SELECT
+          ip.id,
+          ip.title,
+          ip.city,
+          ip.duration,
+          ip.pace,
+          ip.total_days AS totalDays,
+          ip.spot_count AS spotCount,
+          ip.copy_count AS copyCount,
+          ip.favorite_count AS favoriteCount,
+          EXISTS (
+            SELECT 1
+            FROM itinerary_plan_favorites f
+            WHERE f.plan_id = ip.id
+              AND f.user_id = #{userId}
+          ) AS favorited,
+          ip.source_plan_id AS sourcePlanId,
+          sp.title AS sourcePlanTitle,
+          up.nickname AS ownerName,
+          ip.summary,
+          ip.preferences_json AS preferencesJson,
+          ip.created_at AS createdAt,
+          ip.updated_at AS updatedAt
+        FROM itinerary_plans ip
+        LEFT JOIN itinerary_plans sp
+          ON sp.id = ip.source_plan_id
+        LEFT JOIN user_profiles up
+          ON up.user_id = ip.user_id
+        WHERE ip.id = #{id}
+          AND ip.status = 1
+          AND (
+            ip.user_id = #{userId}
+            OR EXISTS (
+              SELECT 1
+              FROM travel_logs l
+              JOIN circles c
+                ON c.id = l.circle_id
+               AND c.status = 1
+              JOIN circle_members cm
+                ON cm.circle_id = c.id
+               AND cm.user_id = #{userId}
+              WHERE l.itinerary_plan_id = ip.id
+                AND l.status = 1
+            )
+          )
+    </select>
+
+    <select id="listHotSharedPlans" resultType="java.util.Map">
+        SELECT
+          ip.id,
+          ip.title,
+          ip.city,
+          ip.duration,
+          ip.pace,
+          ip.total_days AS totalDays,
+          ip.spot_count AS spotCount,
+          ip.copy_count AS copyCount,
+          ip.favorite_count AS favoriteCount,
+          EXISTS (
+            SELECT 1
+            FROM itinerary_plan_favorites f
+            WHERE f.plan_id = ip.id
+              AND f.user_id = #{userId}
+          ) AS favorited,
+          ip.source_plan_id AS sourcePlanId,
+          sp.title AS sourcePlanTitle,
+          up.nickname AS ownerName,
+          ip.summary,
+          ip.preferences_json AS preferencesJson,
+          ip.created_at AS createdAt,
+          ip.updated_at AS updatedAt,
+          COUNT(DISTINCT l.id) AS shareCount,
+          MAX(l.created_at) AS latestSharedAt
+        FROM itinerary_plans ip
+        JOIN travel_logs l
+          ON l.itinerary_plan_id = ip.id
+         AND l.status = 1
+        JOIN circles c
+          ON c.id = l.circle_id
+         AND c.status = 1
+        JOIN circle_members cm
+          ON cm.circle_id = c.id
+         AND cm.user_id = #{userId}
+        LEFT JOIN itinerary_plans sp
+          ON sp.id = ip.source_plan_id
+        LEFT JOIN user_profiles up
+          ON up.user_id = ip.user_id
+        WHERE ip.status = 1
+        GROUP BY
+          ip.id, ip.title, ip.city, ip.duration, ip.pace, ip.total_days, ip.spot_count,
+          ip.copy_count, ip.favorite_count, ip.source_plan_id, sp.title, up.nickname,
+          ip.summary, ip.preferences_json, ip.created_at, ip.updated_at
+        ORDER BY
+          (ip.copy_count * 3 + ip.favorite_count * 2 + COUNT(DISTINCT l.id)) DESC,
+          latestSharedAt DESC,
+          ip.updated_at DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="listItems" resultType="java.util.Map">
+        SELECT
+          id,
+          plan_id AS planId,
+          day_no AS dayNo,
+          order_no AS orderNo,
+          item_type AS itemType,
+          time_slot AS timeSlot,
+          target_id AS targetId,
+          spot_id AS spotId,
+          place_group_id AS placeGroupId,
+          name,
+          description,
+          address,
+          image_url AS image,
+          rating,
+          hotness,
+          longitude,
+          latitude,
+          recommend_reason AS recommendReason
+        FROM itinerary_plan_items
+        WHERE plan_id = #{planId}
+        ORDER BY day_no ASC, order_no ASC, id ASC
+    </select>
+
+    <select id="findNotificationInfo" resultType="java.util.Map">
+        SELECT
+          user_id AS userId,
+          title
+        FROM itinerary_plans
+        WHERE id = #{id}
+          AND status = 1
+    </select>
+
+    <update id="softDeletePlan">
+        UPDATE itinerary_plans
+        SET status = 0,
+            updated_at = NOW()
+        WHERE id = #{id}
+          AND user_id = #{userId}
+          AND status = 1
+    </update>
+
+    <update id="increaseCopyCount">
+        UPDATE itinerary_plans
+        SET copy_count = copy_count + 1,
+            updated_at = NOW()
+        WHERE id = #{id}
+          AND status = 1
+    </update>
+
+    <insert id="insertFavorite">
+        INSERT IGNORE INTO itinerary_plan_favorites (user_id, plan_id)
+        VALUES (#{userId}, #{planId})
+    </insert>
+
+    <delete id="deleteFavorite">
+        DELETE FROM itinerary_plan_favorites
+        WHERE user_id = #{userId}
+          AND plan_id = #{planId}
+    </delete>
+
+    <select id="existsFavorite" resultType="int">
+        SELECT COUNT(*)
+        FROM itinerary_plan_favorites
+        WHERE user_id = #{userId}
+          AND plan_id = #{planId}
+    </select>
+
+    <select id="countFavorites" resultType="int">
+        SELECT COUNT(*)
+        FROM itinerary_plan_favorites
+        WHERE plan_id = #{planId}
+    </select>
+
+    <update id="increaseFavoriteCount">
+        UPDATE itinerary_plans
+        SET favorite_count = favorite_count + 1,
+            updated_at = NOW()
+        WHERE id = #{id}
+          AND status = 1
+    </update>
+
+    <update id="decreaseFavoriteCount">
+        UPDATE itinerary_plans
+        SET favorite_count = GREATEST(favorite_count - 1, 0),
+            updated_at = NOW()
+        WHERE id = #{id}
+          AND status = 1
+    </update>
+
+</mapper>

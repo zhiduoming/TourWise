@@ -1,0 +1,443 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.RecommendMapper">
+
+    <sql id="RecommendableFilter">
+        s.status = 1
+        AND NOT (
+          s.spot_type = 'university'
+          AND s.legacy_place_group_id IS NOT NULL
+          AND s.representative_poi_id IS NULL
+          AND s.legacy_poi_id IS NULL
+        )
+        <choose>
+            <when test="scene == 'campus'">
+                AND s.spot_type IN ('campus', 'university')
+            </when>
+            <when test="scene == 'culture'">
+                AND (s.spot_type = 'museum' OR c.code IN ('historic', 'religious', 'memorial', 'museum'))
+            </when>
+            <when test="scene == 'nature'">
+                AND c.code IN ('scenic', 'natural', 'waterfront')
+            </when>
+            <when test="scene == 'city'">
+                AND (s.spot_type IN ('landmark', 'business') OR c.code IN ('landmark', 'commercial'))
+            </when>
+            <when test="scene == 'family'">
+                AND c.code = 'theme_park'
+            </when>
+        </choose>
+    </sql>
+
+    <sql id="DecisionFilter">
+        <if test="city != null and city != ''">
+            AND (
+              s.city LIKE CONCAT('%', #{city}, '%')
+              OR s.province LIKE CONCAT('%', #{city}, '%')
+              OR s.name LIKE CONCAT('%', #{city}, '%')
+            )
+        </if>
+        <if test="routeRequired">
+            AND COALESCE(pg.route_graph_status, 'none') IN ('draft', 'verified')
+        </if>
+        <if test="foodRequired">
+            AND EXISTS (
+              SELECT 1
+              FROM foods f
+              JOIN pois fp ON fp.id = f.poi_id
+              WHERE f.status = 1
+                AND (
+                  fp.spot_id = s.id
+                  OR fp.place_group_id = s.legacy_place_group_id
+                )
+            )
+        </if>
+        <if test="avoidVisited and userId != null">
+            AND NOT EXISTS (
+              SELECT 1
+              FROM user_spot_actions usa
+              WHERE usa.user_id = #{userId}
+                AND usa.target_type = 'poi'
+                AND usa.target_id = COALESCE(s.representative_poi_id, s.legacy_poi_id)
+                AND usa.action_type = 'visited'
+                AND usa.active = 1
+            )
+        </if>
+        <if test="userId != null">
+            AND NOT EXISTS (
+              SELECT 1
+              FROM user_spot_actions usa
+              WHERE usa.user_id = #{userId}
+                AND usa.target_type = 'poi'
+                AND usa.target_id = COALESCE(s.representative_poi_id, s.legacy_poi_id)
+                AND usa.action_type = 'dislike'
+                AND usa.active = 1
+            )
+        </if>
+    </sql>
+
+    <select id="hotTop10" resultType="java.util.Map">
+        SELECT
+          COALESCE(s.representative_poi_id, s.legacy_poi_id, s.id) AS id,
+          s.id AS spotId,
+          s.legacy_place_group_id AS placeGroupId,
+          s.name,
+          c.code AS category,
+          c.name AS categoryName,
+          s.rating AS score,
+          s.rating AS rating,
+          s.hotness,
+          s.visit_count AS visits,
+          s.cover_image AS image,
+          s.description,
+          s.spot_type AS spotType,
+          s.province,
+          s.city
+        FROM spots s
+        LEFT JOIN poi_categories c ON c.id = s.category_id
+        WHERE s.status = 1
+          AND NOT (
+            s.spot_type = 'university'
+            AND s.legacy_place_group_id IS NOT NULL
+            AND s.representative_poi_id IS NULL
+            AND s.legacy_poi_id IS NULL
+          )
+        ORDER BY
+          CASE
+            WHEN s.legacy_place_group_id = 3 THEN 1
+            WHEN s.legacy_place_group_id = 4 THEN 2
+            WHEN s.legacy_place_group_id = 5 THEN 3
+            WHEN s.legacy_place_group_id = 6 THEN 4
+            ELSE 100
+          END ASC,
+          s.hotness DESC,
+          s.rating DESC,
+          s.visit_count DESC,
+          s.id ASC
+        LIMIT 10
+    </select>
+
+    <select id="list" resultType="java.util.Map">
+        SELECT
+          COALESCE(s.representative_poi_id, s.legacy_poi_id, s.id) AS id,
+          s.id AS spotId,
+          s.name,
+          s.cover_image AS image,
+          s.description,
+          c.code AS category,
+          c.name AS categoryName,
+          s.rating AS score,
+          s.rating AS rating,
+          0 AS distance,
+          s.visit_count AS visits,
+          s.hotness,
+          s.legacy_place_group_id AS placeGroupId,
+          s.spot_type AS spotType,
+          s.province,
+          s.city,
+          COALESCE(pg.route_graph_status, 'none') AS routeGraphStatus,
+          COALESCE((
+            SELECT COUNT(*)
+            FROM foods f
+            JOIN pois fp ON fp.id = f.poi_id
+            WHERE f.status = 1
+              AND (
+                fp.spot_id = s.id
+                OR fp.place_group_id = s.legacy_place_group_id
+              )
+          ), 0) AS foodCount,
+          COALESCE((
+            SELECT COUNT(*)
+            FROM travel_logs tl
+            JOIN pois lp ON lp.id = tl.poi_id
+            WHERE tl.status = 1
+              AND (
+                lp.spot_id = s.id
+                OR lp.place_group_id = s.legacy_place_group_id
+              )
+          ), 0) AS logCount,
+          COALESCE((
+            SELECT GROUP_CONCAT(t.name ORDER BY t.name SEPARATOR '、')
+            FROM spot_tag_relations str
+            JOIN tags t ON t.id = str.tag_id
+            WHERE str.spot_id = s.id
+          ), '') AS tagNames,
+          DATE_FORMAT(rp.open_time, '%H:%i') AS openTime,
+          DATE_FORMAT(rp.close_time, '%H:%i') AS closeTime,
+          CASE WHEN EXISTS (
+            SELECT 1
+            FROM favorites f
+            WHERE f.user_id = #{userId}
+              AND f.target_type = 'poi'
+              AND f.target_id = COALESCE(s.representative_poi_id, s.legacy_poi_id)
+          ) THEN 1 ELSE 0 END AS favoriteMatched,
+          CASE WHEN EXISTS (
+            SELECT 1
+            FROM user_spot_actions usa
+            WHERE usa.user_id = #{userId}
+              AND usa.target_type = 'poi'
+              AND usa.target_id = COALESCE(s.representative_poi_id, s.legacy_poi_id)
+              AND usa.action_type = 'want'
+              AND usa.active = 1
+          ) THEN 1 ELSE 0 END AS wantMatched,
+          CASE WHEN EXISTS (
+            SELECT 1
+            FROM user_spot_actions usa
+            WHERE usa.user_id = #{userId}
+              AND usa.target_type = 'poi'
+              AND usa.target_id = COALESCE(s.representative_poi_id, s.legacy_poi_id)
+              AND usa.action_type = 'visited'
+              AND usa.active = 1
+          ) THEN 1 ELSE 0 END AS visitedMatched,
+          CASE WHEN EXISTS (
+            SELECT 1
+            FROM user_spot_actions usa
+            WHERE usa.user_id = #{userId}
+              AND usa.target_type = 'poi'
+              AND usa.target_id = COALESCE(s.representative_poi_id, s.legacy_poi_id)
+              AND usa.action_type = 'dislike'
+              AND usa.active = 1
+          ) THEN 1 ELSE 0 END AS dislikeMatched,
+          COALESCE((
+            SELECT COUNT(*)
+            FROM browsing_history bh
+            WHERE bh.user_id = #{userId}
+              AND bh.target_type = 'poi'
+              AND bh.target_id = COALESCE(s.representative_poi_id, s.legacy_poi_id)
+          ), 0) AS browseCount,
+          COALESCE((
+            SELECT r.rating
+            FROM ratings r
+            WHERE r.user_id = #{userId}
+              AND r.target_type = 'poi'
+              AND r.target_id = COALESCE(s.representative_poi_id, s.legacy_poi_id)
+            LIMIT 1
+          ), 0) AS userRating,
+          COALESCE((
+              SELECT SUM(up.weight)
+              FROM user_preferences up
+              JOIN spot_tag_relations str ON str.tag_id = up.tag_id
+              WHERE up.user_id = #{userId}
+                AND str.spot_id = s.id
+          ), 0) AS preferenceScore,
+          COALESCE((
+            SELECT COUNT(DISTINCT interacted_spot.id)
+            FROM (
+              SELECT p.spot_id AS spot_id
+              FROM favorites f
+              JOIN pois p ON p.id = f.target_id
+              WHERE f.user_id = #{userId}
+                AND f.target_type = 'poi'
+              UNION ALL
+              SELECT p.spot_id AS spot_id
+              FROM user_spot_actions usa
+              JOIN pois p ON p.id = usa.target_id
+              WHERE usa.user_id = #{userId}
+                AND usa.target_type = 'poi'
+                AND usa.active = 1
+              UNION ALL
+              SELECT p.spot_id AS spot_id
+              FROM browsing_history bh
+              JOIN pois p ON p.id = bh.target_id
+              WHERE bh.user_id = #{userId}
+                AND bh.target_type = 'poi'
+            ) user_actions
+            JOIN spots interacted_spot ON interacted_spot.id = user_actions.spot_id
+            WHERE interacted_spot.id != s.id
+              AND (
+                interacted_spot.category_id = s.category_id
+                OR interacted_spot.spot_type = s.spot_type
+              )
+          ), 0) AS similarActionCount,
+          (
+            s.hotness * 0.18
+            + s.visit_count * 0.08
+            + s.rating * 20
+            + COALESCE((
+                SELECT SUM(up.weight) * 30
+                FROM user_preferences up
+                JOIN spot_tag_relations str ON str.tag_id = up.tag_id
+                WHERE up.user_id = #{userId}
+                  AND str.spot_id = s.id
+              ), 0)
+            + COALESCE((
+                SELECT COUNT(*) * 20
+                FROM browsing_history bh
+                WHERE bh.user_id = #{userId}
+                  AND bh.target_type = 'poi'
+                  AND bh.target_id = COALESCE(s.representative_poi_id, s.legacy_poi_id)
+              ), 0)
+            + COALESCE((
+                SELECT COUNT(*) * 80
+                FROM favorites f
+                WHERE f.user_id = #{userId}
+                  AND f.target_type = 'poi'
+                  AND f.target_id = COALESCE(s.representative_poi_id, s.legacy_poi_id)
+              ), 0)
+            + COALESCE((
+                SELECT SUM(CASE usa.action_type WHEN 'want' THEN 90 WHEN 'visited' THEN 25 WHEN 'dislike' THEN -260 ELSE 0 END)
+                FROM user_spot_actions usa
+                WHERE usa.user_id = #{userId}
+                  AND usa.target_type = 'poi'
+                  AND usa.target_id = COALESCE(s.representative_poi_id, s.legacy_poi_id)
+                  AND usa.active = 1
+              ), 0)
+            + COALESCE((
+                SELECT r.rating * 12
+                FROM ratings r
+                WHERE r.user_id = #{userId}
+                  AND r.target_type = 'poi'
+                  AND r.target_id = COALESCE(s.representative_poi_id, s.legacy_poi_id)
+                LIMIT 1
+              ), 0)
+            + COALESCE((
+                SELECT COUNT(DISTINCT interacted_spot.id) * 18
+                FROM (
+                  SELECT p.spot_id AS spot_id
+                  FROM favorites f
+                  JOIN pois p ON p.id = f.target_id
+                  WHERE f.user_id = #{userId}
+                    AND f.target_type = 'poi'
+                  UNION ALL
+                  SELECT p.spot_id AS spot_id
+                  FROM user_spot_actions usa
+                  JOIN pois p ON p.id = usa.target_id
+                  WHERE usa.user_id = #{userId}
+                    AND usa.target_type = 'poi'
+                    AND usa.active = 1
+                  UNION ALL
+                  SELECT p.spot_id AS spot_id
+                  FROM browsing_history bh
+                  JOIN pois p ON p.id = bh.target_id
+                  WHERE bh.user_id = #{userId}
+                    AND bh.target_type = 'poi'
+                ) user_actions
+                JOIN spots interacted_spot ON interacted_spot.id = user_actions.spot_id
+                WHERE interacted_spot.id != s.id
+                  AND (
+                    interacted_spot.category_id = s.category_id
+                    OR interacted_spot.spot_type = s.spot_type
+                  )
+              ), 0)
+            + CASE
+                WHEN #{purpose} = 'photo'
+                  AND (c.code IN ('scenic', 'natural', 'waterfront', 'landmark') OR s.description LIKE '%拍照%' OR s.description LIKE '%打卡%')
+                  THEN 180
+                WHEN #{purpose} = 'study'
+                  AND (s.spot_type IN ('campus', 'university', 'museum') OR c.code IN ('museum', 'historic', 'memorial'))
+                  THEN 180
+                WHEN #{purpose} = 'food'
+                  THEN COALESCE((
+                    SELECT COUNT(*) * 45
+                    FROM foods f
+                    JOIN pois fp ON fp.id = f.poi_id
+                    WHERE f.status = 1
+                      AND (
+                        fp.spot_id = s.id
+                        OR fp.place_group_id = s.legacy_place_group_id
+                      )
+                  ), 0)
+                WHEN #{purpose} = 'relax'
+                  AND (s.spot_type IN ('park', 'scenic') OR c.code IN ('scenic', 'natural', 'waterfront'))
+                  THEN 160
+                WHEN #{purpose} = 'route'
+                  AND COALESCE(pg.route_graph_status, 'none') IN ('draft', 'verified')
+                  THEN 200
+                ELSE 0
+              END
+          ) AS recommendScore
+        FROM spots s
+        LEFT JOIN poi_categories c ON c.id = s.category_id
+        LEFT JOIN pois rp ON rp.id = COALESCE(s.representative_poi_id, s.legacy_poi_id)
+        LEFT JOIN place_groups pg ON pg.id = s.legacy_place_group_id
+        WHERE
+        <include refid="RecommendableFilter"/>
+        <include refid="DecisionFilter"/>
+        <choose>
+            <when test="strategy == 'interest'">
+                ORDER BY recommendScore DESC, s.rating DESC, s.id ASC
+            </when>
+            <when test="strategy == 'rating'">
+                ORDER BY s.rating DESC, s.hotness DESC, s.visit_count DESC, s.id ASC
+            </when>
+            <otherwise>
+                ORDER BY
+                  CASE
+                    WHEN s.legacy_place_group_id = 3 THEN 1
+                    WHEN s.legacy_place_group_id = 4 THEN 2
+                    WHEN s.legacy_place_group_id = 5 THEN 3
+                    WHEN s.legacy_place_group_id = 6 THEN 4
+                    ELSE 100
+                  END ASC,
+                  recommendScore DESC,
+                  s.hotness DESC,
+                  s.rating DESC,
+                  s.visit_count DESC,
+                  s.id ASC
+            </otherwise>
+        </choose>
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*)
+        FROM spots s
+        LEFT JOIN poi_categories c ON c.id = s.category_id
+        LEFT JOIN place_groups pg ON pg.id = s.legacy_place_group_id
+        WHERE
+        <include refid="RecommendableFilter"/>
+        <include refid="DecisionFilter"/>
+    </select>
+
+    <select id="existsPoi" resultType="int">
+        SELECT COUNT(*)
+        FROM pois
+        WHERE id = #{id}
+          AND status = 1
+    </select>
+
+    <select id="existsFood" resultType="int">
+        SELECT COUNT(*)
+        FROM foods
+        WHERE id = #{id}
+          AND status = 1
+    </select>
+
+    <select id="existsLog" resultType="int">
+        SELECT COUNT(*)
+        FROM travel_logs
+        WHERE id = #{id}
+          AND status = 1
+    </select>
+
+    <insert id="upsertRating">
+        INSERT INTO ratings (user_id, target_type, target_id, rating)
+        VALUES (#{userId}, #{targetType}, #{targetId}, #{rating})
+        ON DUPLICATE KEY UPDATE rating = VALUES(rating), updated_at = NOW()
+    </insert>
+
+    <update id="refreshPoiRating">
+        UPDATE pois
+        SET rating = (
+          SELECT ROUND(AVG(r.rating), 1)
+          FROM ratings r
+          WHERE r.target_type = 'poi'
+            AND r.target_id = #{id}
+        )
+        WHERE id = #{id}
+    </update>
+
+    <update id="refreshFoodRating">
+        UPDATE foods
+        SET rating = (
+          SELECT ROUND(AVG(r.rating), 1)
+          FROM ratings r
+          WHERE r.target_type = 'food'
+            AND r.target_id = #{id}
+        )
+        WHERE id = #{id}
+    </update>
+
+</mapper>

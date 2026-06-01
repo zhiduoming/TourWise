@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.AdminImageMapper">
+
+    <select id="existsPoi" resultType="int">
+        SELECT COUNT(*)
+        FROM pois
+        WHERE id = #{poiId}
+          AND status = 1
+    </select>
+
+    <select id="existsSpot" resultType="int">
+        SELECT COUNT(*)
+        FROM spots
+        WHERE id = #{spotId}
+          AND status = 1
+    </select>
+
+    <select id="existsFood" resultType="int">
+        SELECT COUNT(*)
+        FROM foods
+        WHERE id = #{foodId}
+          AND status = 1
+    </select>
+
+    <select id="existsCircle" resultType="int">
+        SELECT COUNT(*)
+        FROM circles
+        WHERE id = #{circleId}
+          AND status = 1
+    </select>
+
+    <update id="updatePoiImage">
+        UPDATE pois
+        SET image_url = #{imageUrl}
+        WHERE id = #{poiId}
+          AND status = 1
+    </update>
+
+    <update id="updateSpotCover">
+        UPDATE spots
+        SET cover_image = #{imageUrl}
+        WHERE id = #{spotId}
+          AND status = 1
+    </update>
+
+    <update id="updateSpotCoverByPoiId">
+        UPDATE spots s
+        JOIN pois p
+          ON p.id = #{poiId}
+         AND p.status = 1
+        SET s.cover_image = #{imageUrl}
+        WHERE s.status = 1
+          AND (
+            s.id = p.spot_id
+            OR s.representative_poi_id = p.id
+            OR s.legacy_poi_id = p.id
+          )
+    </update>
+
+    <update id="updateRepresentativePoiImage">
+        UPDATE pois p
+        JOIN spots s ON s.id = #{spotId}
+        SET p.image_url = #{imageUrl}
+        WHERE p.status = 1
+          AND (
+            p.id = s.representative_poi_id
+            OR p.id = s.legacy_poi_id
+          )
+    </update>
+
+    <update id="updateFoodImage">
+        UPDATE foods
+        SET image_url = #{imageUrl}
+        WHERE id = #{foodId}
+          AND status = 1
+    </update>
+
+    <update id="updateCircleCover">
+        UPDATE circles
+        SET cover_url = #{imageUrl}
+        WHERE id = #{circleId}
+          AND status = 1
+    </update>
+
+</mapper>

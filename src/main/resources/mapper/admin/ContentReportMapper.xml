@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tourwise.mapper.ContentReportMapper">
+
+    <select id="existsPendingReport" resultType="int">
+        SELECT COUNT(*)
+        FROM content_reports
+        WHERE target_type = #{targetType}
+          AND target_id = #{targetId}
+          AND reporter_id = #{reporterId}
+          AND status = 'pending'
+    </select>
+
+    <insert id="insert" parameterType="com.tourwise.model.ContentReportRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO content_reports
+          (target_type, target_id, reporter_id, reason, detail, status)
+        VALUES
+          (#{targetType}, #{targetId}, #{reporterId}, #{reason}, #{detail}, 'pending')
+    </insert>
+
+    <sql id="ReportSelect">
+        r.id,
+        r.target_type AS targetType,
+        r.target_id AS targetId,
+        r.reporter_id AS reporterId,
+        COALESCE(rp.nickname, ru.username) AS reporterName,
+        CASE
+          WHEN r.target_type = 'log' THEN COALESCE(l.title, CONCAT('日志 #', l.id))
+          WHEN r.target_type = 'comment' THEN CONCAT('评论 #', lc.id)
+          ELSE CONCAT(r.target_type, ' #', r.target_id)
+        END AS targetTitle,
+        CASE
+          WHEN r.target_type = 'log' THEN l.content
+          WHEN r.target_type = 'comment' THEN lc.content
+          ELSE NULL
+        END AS targetContent,
+        r.reason,
+        r.detail,
+        r.status,
+        r.handler_id AS handlerId,
+        COALESCE(hp.nickname, hu.username) AS handlerName,
+        r.handle_note AS handleNote,
+        r.handled_at AS handledAt,
+        r.created_at AS createdAt,
+        r.updated_at AS updatedAt
+    </sql>
+
+    <sql id="ReportFrom">
+        FROM content_reports r
+        JOIN users ru ON ru.id = r.reporter_id
+        LEFT JOIN user_profiles rp ON rp.user_id = ru.id
+        LEFT JOIN users hu ON hu.id = r.handler_id
+        LEFT JOIN user_profiles hp ON hp.user_id = hu.id
+        LEFT JOIN travel_logs l ON r.target_type = 'log' AND l.id = r.target_id
+        LEFT JOIN log_comments lc ON r.target_type = 'comment' AND lc.id = r.target_id
+    </sql>
+
+    <sql id="ReportWhere">
+        WHERE 1 = 1
+        <if test="status != null">
+            AND r.status = #{status}
+        </if>
+        <if test="targetType != null">
+            AND r.target_type = #{targetType}
+        </if>
+        <if test="keyword != null">
+            AND (
+              r.reason LIKE CONCAT('%', #{keyword}, '%')
+              OR r.detail LIKE CONCAT('%', #{keyword}, '%')
+              OR l.title LIKE CONCAT('%', #{keyword}, '%')
+              OR l.content LIKE CONCAT('%', #{keyword}, '%')
+              OR lc.content LIKE CONCAT('%', #{keyword}, '%')
+              OR ru.username LIKE CONCAT('%', #{keyword}, '%')
+              OR rp.nickname LIKE CONCAT('%', #{keyword}, '%')
+            )
+        </if>
+    </sql>
+
+    <select id="list" resultType="java.util.Map">
+        SELECT
+        <include refid="ReportSelect"/>
+        <include refid="ReportFrom"/>
+        <include refid="ReportWhere"/>
+        ORDER BY
+          CASE r.status WHEN 'pending' THEN 1 WHEN 'handled' THEN 2 ELSE 3 END,
+          r.created_at DESC,
+          r.id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*)
+        <include refid="ReportFrom"/>
+        <include refid="ReportWhere"/>
+    </select>
+
+    <select id="findById" resultType="com.tourwise.model.ContentReportRecord">
+        SELECT
+          id,
+          target_type AS targetType,
+          target_id AS targetId,
+          reporter_id AS reporterId,
+          reason,
+          detail,
+          status,
+          handler_id AS handlerId,
+          handle_note AS handleNote,
+          handled_at AS handledAt,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM content_reports
+        WHERE id = #{id}
+    </select>
+
+    <update id="handle" parameterType="com.tourwise.model.ContentReportRecord">
+        UPDATE content_reports
+        SET
+          status = #{status},
+          handler_id = #{handlerId},
+          handle_note = #{handleNote},
+          handled_at = NOW(),
+          updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+</mapper>
