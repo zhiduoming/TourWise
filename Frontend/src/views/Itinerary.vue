@@ -175,25 +175,35 @@
           <div v-else class="day-list">
             <section v-for="day in plan.days" :key="day.dayNo" class="day-section">
               <div class="day-heading">
-                <h2>{{ day.title }}</h2>
-                <span>{{ day.summary }}</span>
-                <em v-if="day.estimatedDistanceM">景点间直线约 {{ formatDistance(day.estimatedDistanceM) }}</em>
+                <div class="day-heading-text">
+                  <h2>{{ day.title }}</h2>
+                  <span>{{ day.summary }}</span>
+                  <em v-if="day.estimatedDistanceM">景点间直线约 {{ formatDistance(day.estimatedDistanceM) }}</em>
+                </div>
+                <div class="day-edit-actions">
+                  <el-button size="small" type="primary" plain @click="openAddDialog(day, 'spot')">
+                    <el-icon><Plus /></el-icon>添加景点
+                  </el-button>
+                  <el-button size="small" type="warning" plain @click="openAddDialog(day, 'food')">
+                    <el-icon><Plus /></el-icon>添加美食
+                  </el-button>
+                </div>
               </div>
 
               <el-timeline>
                 <el-timeline-item
-                  v-for="item in day.items"
-                  :key="`${day.dayNo}-${item.orderNo}-${item.itemType}-${item.targetId}`"
+                  v-for="(item, idx) in day.items"
+                  :key="`${day.dayNo}-${idx}-${item.itemType}-${item.targetId}`"
                   :timestamp="item.timeSlot"
                   placement="top"
                 >
-                  <article class="plan-item" @click="openItem(item)">
-                    <el-image :src="item.image || placeholderImage(item)" fit="cover" class="item-cover">
+                  <article class="plan-item">
+                    <el-image :src="item.image || placeholderImage(item)" fit="cover" class="item-cover" @click="openItem(item)">
                       <template #error>
                         <div class="image-fallback">{{ item.itemType === 'food' ? '美食' : '景点' }}</div>
                       </template>
                     </el-image>
-                    <div class="item-main">
+                    <div class="item-main" @click="openItem(item)">
                       <div class="item-title-row">
                         <h3>{{ item.name }}</h3>
                         <el-tag size="small" :type="item.itemType === 'food' ? 'warning' : 'primary'">
@@ -213,9 +223,21 @@
                         <span>{{ item.recommendReason }}</span>
                       </div>
                     </div>
+                    <div class="item-edit-actions" @click.stop>
+                      <el-button size="small" circle :disabled="idx === 0" @click.stop="moveItem(day, idx, -1)">
+                        <el-icon><ArrowUp /></el-icon>
+                      </el-button>
+                      <el-button size="small" circle :disabled="idx === day.items.length - 1" @click.stop="moveItem(day, idx, 1)">
+                        <el-icon><ArrowDown /></el-icon>
+                      </el-button>
+                      <el-button size="small" type="danger" circle @click.stop="removeItem(day, idx)">
+                        <el-icon><Delete /></el-icon>
+                      </el-button>
+                    </div>
                   </article>
                 </el-timeline-item>
               </el-timeline>
+              <el-empty v-if="!day.items || day.items.length === 0" description="这一天还没有安排，点上方按钮添加" :image-size="80" />
             </section>
           </div>
         </el-card>
@@ -310,6 +332,56 @@
       </div>
     </el-drawer>
 
+    <el-dialog
+      v-model="addDialogVisible"
+      :title="addDialogType === 'food' ? '添加美食到行程' : '添加景点到行程'"
+      width="640px"
+      @open="onAddDialogOpen"
+    >
+      <div class="add-dialog">
+        <el-input
+          v-model="addKeyword"
+          :placeholder="addDialogType === 'food' ? '搜索美食名称、菜系' : '搜索景点名称、城市'"
+          clearable
+          @keyup.enter="searchAddCandidates"
+        >
+          <template #append>
+            <el-button :loading="addSearching" @click="searchAddCandidates">搜索</el-button>
+          </template>
+        </el-input>
+
+        <div v-loading="addSearching" class="add-result-list">
+          <el-empty v-if="addCandidates.length === 0 && !addSearching" :image-size="80" description="暂无结果，换个关键词试试" />
+          <article
+            v-for="cand in addCandidates"
+            :key="`${addDialogType}-${cand.id}`"
+            class="add-candidate"
+            @click="confirmAddCandidate(cand)"
+          >
+            <div class="add-candidate-main">
+              <div class="add-candidate-title">
+                <strong>{{ cand.name }}</strong>
+                <el-tag size="small" :type="addDialogType === 'food' ? 'warning' : 'primary'">
+                  {{ addDialogType === 'food' ? '美食' : '景点' }}
+                </el-tag>
+              </div>
+              <p>{{ cand.description || cand.address || cand.cuisineName || '暂无简介' }}</p>
+              <div class="add-candidate-meta">
+                <span v-if="cand.rating || cand.score">
+                  <el-icon><Star /></el-icon>
+                  {{ cand.rating || cand.score }}
+                </span>
+                <span v-if="cand.city || cand.placeGroupName">
+                  {{ cand.city || cand.placeGroupName }}
+                </span>
+              </div>
+            </div>
+            <el-button size="small" type="primary" plain>添加</el-button>
+          </article>
+        </div>
+      </div>
+    </el-dialog>
+
     <el-dialog v-model="shareDialogVisible" title="分享到圈子" width="560px">
       <el-alert
         v-if="!plan?.id"
@@ -373,7 +445,9 @@ import {
 } from '@/api/itinerary'
 import { createLog } from '@/api/log'
 import { getCircleList } from '@/api/circle'
-import { Calendar, Compass, Edit, Star, View } from '@element-plus/icons-vue'
+import { searchFacilities } from '@/api/search'
+import { getFoodList } from '@/api/food'
+import { Calendar, Compass, Edit, Star, View, Plus, ArrowUp, ArrowDown, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
@@ -417,6 +491,13 @@ const shareForm = reactive({
   title: '',
   content: ''
 })
+
+const addDialogVisible = ref(false)
+const addDialogType = ref('spot')
+const addTargetDay = ref(null)
+const addKeyword = ref('')
+const addSearching = ref(false)
+const addCandidates = ref([])
 
 const durationOptions = [
   { label: '半日', value: 'half_day' },
@@ -757,6 +838,133 @@ const buildShareContent = () => {
   return lines.filter(line => line !== null && line !== undefined).join('\n').trim()
 }
 
+const reindexDay = (day) => {
+  if (!day || !Array.isArray(day.items)) return
+  day.items.forEach((item, idx) => {
+    item.orderNo = idx + 1
+  })
+  redistributeTimeSlots(day)
+  refreshPlanCounters()
+}
+
+const redistributeTimeSlots = (day) => {
+  const items = day.items || []
+  if (items.length === 0) return
+  const baseHour = 9
+  const stepHour = day.items.length > 0 ? Math.max(1, Math.min(3, Math.floor(10 / items.length))) : 2
+  items.forEach((item, idx) => {
+    if (item.timeSlot && item._manualTime) return
+    const start = baseHour + idx * stepHour
+    const end = Math.min(22, start + stepHour)
+    item.timeSlot = `${String(start).padStart(2, '0')}:00 - ${String(end).padStart(2, '0')}:00`
+  })
+}
+
+const refreshPlanCounters = () => {
+  if (!plan.value) return
+  const days = plan.value.days || []
+  plan.value.totalDays = days.length
+  plan.value.spotCount = days.reduce(
+    (sum, d) => sum + (d.items || []).filter(it => it.itemType === 'spot').length,
+    0
+  )
+}
+
+const moveItem = (day, idx, delta) => {
+  const items = day.items || []
+  const newIdx = idx + delta
+  if (newIdx < 0 || newIdx >= items.length) return
+  const [moved] = items.splice(idx, 1)
+  items.splice(newIdx, 0, moved)
+  reindexDay(day)
+}
+
+const removeItem = async (day, idx) => {
+  const item = day.items[idx]
+  try {
+    await ElMessageBox.confirm(`确定从行程中移除「${item.name}」吗？`, '移除条目', {
+      type: 'warning',
+      confirmButtonText: '移除',
+      cancelButtonText: '取消'
+    })
+    day.items.splice(idx, 1)
+    reindexDay(day)
+    ElMessage.success('已移除')
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('移除行程条目失败:', error)
+    }
+  }
+}
+
+const openAddDialog = (day, type) => {
+  addTargetDay.value = day
+  addDialogType.value = type
+  addKeyword.value = ''
+  addCandidates.value = []
+  addDialogVisible.value = true
+}
+
+const onAddDialogOpen = () => {
+  searchAddCandidates()
+}
+
+const searchAddCandidates = async () => {
+  addSearching.value = true
+  try {
+    if (addDialogType.value === 'food') {
+      const res = await getFoodList({
+        keyword: addKeyword.value.trim() || undefined,
+        sort: 'score'
+      })
+      const list = Array.isArray(res.data) ? res.data : (res.data?.list || [])
+      addCandidates.value = list.slice(0, 30)
+    } else {
+      const res = await searchFacilities({
+        keyword: addKeyword.value.trim() || undefined,
+        spotOnly: true,
+        page: 1,
+        pageSize: 30
+      })
+      addCandidates.value = res.data?.list || []
+    }
+  } catch (error) {
+    console.error('搜索候选失败:', error)
+    addCandidates.value = []
+  } finally {
+    addSearching.value = false
+  }
+}
+
+const confirmAddCandidate = (cand) => {
+  const day = addTargetDay.value
+  if (!day) return
+  const isFood = addDialogType.value === 'food'
+  if (!day.items) day.items = []
+  const exists = day.items.some(it => it.itemType === addDialogType.value && String(it.targetId) === String(cand.id))
+  if (exists) {
+    ElMessage.warning('这一天已经包含该条目')
+    return
+  }
+  day.items.push({
+    itemType: isFood ? 'food' : 'spot',
+    targetId: cand.id,
+    spotId: isFood ? null : (cand.spotId || cand.id),
+    name: cand.name,
+    image: cand.image || cand.coverUrl || cand.cover || cand.imageUrl || '',
+    address: cand.address || cand.location || cand.city || cand.placeGroupName || '',
+    description: cand.description || cand.cuisineName || '',
+    rating: cand.rating || cand.score || null,
+    hotness: cand.hotness || null,
+    recommendReason: '手动添加',
+    timeSlot: '',
+    orderNo: day.items.length + 1
+  })
+  reindexDay(day)
+  ElMessage.success(`已添加「${cand.name}」到${day.title || '当天'}`)
+  addDialogVisible.value = false
+}
+
 const openItem = (item) => {
   if (item.itemType === 'food') {
     router.push(`/food/${item.targetId}`)
@@ -1087,6 +1295,10 @@ onMounted(async () => {
 }
 
 .day-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
   margin-bottom: 16px;
 
   h2 {
@@ -1107,14 +1319,24 @@ onMounted(async () => {
   }
 }
 
+.day-heading-text {
+  min-width: 0;
+}
+
+.day-edit-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .plan-item {
+  position: relative;
   display: grid;
-  grid-template-columns: 160px 1fr;
+  grid-template-columns: 160px 1fr auto;
   gap: 16px;
   padding: 14px;
   border: 1px solid #ebeef5;
   border-radius: 8px;
-  cursor: pointer;
   background: #fff;
   transition: box-shadow 0.2s ease, transform 0.2s ease;
 
@@ -1129,6 +1351,84 @@ onMounted(async () => {
   height: 104px;
   border-radius: 8px;
   background: #f5f7fa;
+  cursor: pointer;
+}
+
+.item-main {
+  cursor: pointer;
+}
+
+.item-edit-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-self: center;
+}
+
+.add-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.add-result-list {
+  max-height: 460px;
+  overflow-y: auto;
+  min-height: 200px;
+}
+
+.add-candidate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 6px;
+  border-bottom: 1px solid #ebeef5;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.add-candidate:hover {
+  background: #f5f7fa;
+}
+
+.add-candidate-main {
+  min-width: 0;
+  flex: 1;
+
+  p {
+    margin: 4px 0;
+    color: #606266;
+    font-size: 13px;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+.add-candidate-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  strong {
+    color: #303133;
+    font-size: 15px;
+  }
+}
+
+.add-candidate-meta {
+  display: flex;
+  gap: 12px;
+  color: #909399;
+  font-size: 12px;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
 }
 
 .image-fallback {
