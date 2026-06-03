@@ -19,6 +19,9 @@ public class FoodVO {
     private String name;
     private String image;
     private String description;
+    private String aiSummary;
+    private BigDecimal longitude;
+    private BigDecimal latitude;
     private BigDecimal score;
     private BigDecimal rating;
     private Integer priceLevel;
@@ -43,6 +46,9 @@ public class FoodVO {
         vo.setName(VoConvert.string(row, "name"));
         vo.setImage(VoConvert.string(row, "image"));
         vo.setDescription(VoConvert.string(row, "description"));
+        vo.setAiSummary(VoConvert.string(row, "aiSummary"));
+        vo.setLongitude(VoConvert.decimal(row, "longitude"));
+        vo.setLatitude(VoConvert.decimal(row, "latitude"));
         vo.setScore(VoConvert.decimal(row, "score"));
         vo.setRating(VoConvert.decimal(row, "rating"));
         vo.setPriceLevel(VoConvert.intValue(row, "priceLevel"));

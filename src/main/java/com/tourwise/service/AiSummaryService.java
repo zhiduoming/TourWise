@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.tourwise.common.BusinessException;
 import com.tourwise.common.MapUtil;
+import com.tourwise.mapper.FoodMapper;
 import com.tourwise.mapper.SearchMapper;
 import com.tourwise.config.AiProperties;
 import org.slf4j.Logger;
@@ -26,14 +27,16 @@ public class AiSummaryService {
 
     private final AiProperties aiProperties;
     private final SearchMapper searchMapper;
+    private final FoodMapper foodMapper;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
-    public AiSummaryService(AiProperties aiProperties, SearchMapper searchMapper) {
+    public AiSummaryService(AiProperties aiProperties, SearchMapper searchMapper, FoodMapper foodMapper) {
         this.aiProperties = aiProperties;
         this.searchMapper = searchMapper;
+        this.foodMapper = foodMapper;
     }
 
     public String getOrGenerate(Long poiId, boolean force) {
@@ -57,6 +60,67 @@ public class AiSummaryService {
         String summary = callDeepSeek(buildPrompt(spot));
         searchMapper.saveAiSummary(poiId, summary);
         return summary;
+    }
+
+    public String getOrGenerateForFood(Long foodId, boolean force) {
+        if (!aiProperties.isConfigured()) {
+            throw BusinessException.badRequest("AI 功能暂未配置，请联系管理员");
+        }
+
+        if (!force) {
+            String cached = foodMapper.findAiSummary(foodId);
+            if (StringUtils.hasText(cached)) {
+                return cached;
+            }
+        }
+
+        Map<String, Object> raw = foodMapper.detail(foodId);
+        if (raw == null) {
+            throw BusinessException.notFound("美食不存在");
+        }
+        Map<String, Object> food = MapUtil.normalize(raw);
+
+        String summary = callDeepSeek(buildFoodPrompt(food));
+        foodMapper.saveAiSummary(foodId, summary);
+        return summary;
+    }
+
+    private String buildFoodPrompt(Map<String, Object> food) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("你是一位熟悉北京本地餐饮的美食探店达人。请根据以下具体店铺的真实信息，用 200 到 280 字生成一段中文美食介绍。");
+        sb.append("要求：");
+        sb.append("1) 必须紧扣给出的店名、菜系、地址，描述这家店在该地点的特色、招牌菜（基于菜系合理推测）、口味风格、价位档次、适合人群和就餐场景；");
+        sb.append("2) 语气自然亲切、像写探店点评，不要逐条列字段、不要出现评分/热度等数字指标、不要泛泛而谈"
+                + "“是一家不错的餐厅”这种空话；");
+        sb.append("3) 如果店名带分店后缀(例如「XX(沙河店)」)，请围绕该具体分店所在区域(校园周边/商圈/家属区等)展开。\n\n");
+
+        appendIfPresent(sb, "店名", food, "name");
+        appendIfPresent(sb, "菜系", food, "cuisineName");
+        appendIfPresent(sb, "所在校区/园区", food, "spotName");
+        appendIfPresent(sb, "地址", food, "address");
+
+        Object priceLevel = food.get("priceLevel");
+        if (priceLevel != null) {
+            String levelText = switch (priceLevel.toString()) {
+                case "1" -> "实惠（人均 30 元以下）";
+                case "2" -> "适中（人均 30-80 元）";
+                case "3" -> "较高（人均 80 元以上）";
+                default -> priceLevel.toString();
+            };
+            sb.append("价格档次：").append(levelText).append("\n");
+        }
+        Object avgPrice = food.get("avgPrice");
+        if (avgPrice != null && !avgPrice.toString().equals("0") && !avgPrice.toString().equals("0.00")) {
+            sb.append("参考人均：").append(avgPrice).append(" 元\n");
+        }
+
+        String openTime = str(food, "openTime");
+        String closeTime = str(food, "closeTime");
+        if (StringUtils.hasText(openTime) && StringUtils.hasText(closeTime)) {
+            sb.append("营业时间：").append(openTime).append(" – ").append(closeTime).append("\n");
+        }
+
+        return sb.toString();
     }
 
     private String buildPrompt(Map<String, Object> spot) {

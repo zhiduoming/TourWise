@@ -34,3 +34,4 @@ build/
 
 ### VS Code ###
 .vscode/
+scripts/import_amap_foods_backup.sql

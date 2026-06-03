@@ -9,6 +9,24 @@ export function getFoodList(params) {
   })
 }
 
+// 获取美食分页列表（含 total）
+export function getFoodPagedList(params) {
+  return request({
+    url: '/food/paged-list',
+    method: 'get',
+    params
+  })
+}
+
+// 获取/生成美食 AI 简介（force=true 强制重新生成）
+export function getFoodAiSummary(id, force = false) {
+  return request({
+    url: `/food/list/${id}/ai-summary`,
+    method: 'get',
+    params: force ? { force: true } : {}
+  })
+}
+
 // 获取美食详情
 export function getFoodDetail(id) {
   return request({

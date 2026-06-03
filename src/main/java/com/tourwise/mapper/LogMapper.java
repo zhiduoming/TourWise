@@ -15,6 +15,7 @@ public interface LogMapper {
             @Param("circleId") Long circleId,
             @Param("userId") Long userId,
             @Param("spotId") Long spotId,
+            @Param("foodId") Long foodId,
             @Param("keyword") String keyword,
             @Param("tab") String tab,
             @Param("offset") int offset,
@@ -24,6 +25,7 @@ public interface LogMapper {
             @Param("circleId") Long circleId,
             @Param("userId") Long userId,
             @Param("spotId") Long spotId,
+            @Param("foodId") Long foodId,
             @Param("keyword") String keyword);
 
     Map<String, Object> findById(@Param("id") Long id, @Param("currentUserId") Long currentUserId);

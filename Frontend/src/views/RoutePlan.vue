@@ -1207,6 +1207,42 @@ const handleRouteSourceChange = async (value) => {
   }
 }
 
+const applyFoodRouteQuery = () => {
+  const { startSpotId, endLng, endLat, endName } = route.query
+  if (!startSpotId || !endLng || !endLat) {
+    return false
+  }
+  if (!amapConfig.enabled) {
+    ElMessage.warning('高德地图未配置，暂时无法规划到该美食店的路线')
+    return false
+  }
+  const startSpot = routeSpots.value.find(s => String(s.id) === String(startSpotId))
+  if (!startSpot || startSpot.longitude == null || startSpot.latitude == null) {
+    ElMessage.warning('未找到起点景点的坐标')
+    return false
+  }
+  const lngNum = Number(endLng)
+  const latNum = Number(endLat)
+  if (!Number.isFinite(lngNum) || !Number.isFinite(latNum)) {
+    return false
+  }
+  // 把美食店作为一个临时景点插入 routeSpots，使其能被 spot:ID 引用机制解析
+  const virtualId = `food-${Date.now()}`
+  routeSpots.value.push({
+    id: virtualId,
+    name: String(endName || '美食目的地'),
+    longitude: lngNum,
+    latitude: latNum
+  })
+  routeSource.value = 'amap'
+  routeForm.start = `spot:${startSpot.id}`
+  routeForm.end = `spot:${virtualId}`
+  routeForm.waypoints = []
+  routeResult.value = null
+  locationResolve.value = null
+  return true
+}
+
 const applyItineraryRouteQuery = () => {
   if (route.query.routeType !== 'between' || !route.query.routeSpotIds) {
     return false
@@ -1397,8 +1433,9 @@ onMounted(async () => {
   await loadRouteScopes()
 
   const appliedItineraryRoute = applyItineraryRouteQuery()
+  const appliedFoodRoute = !appliedItineraryRoute && applyFoodRouteQuery()
 
-  if (!appliedItineraryRoute && route.query.placeGroupId) {
+  if (!appliedItineraryRoute && !appliedFoodRoute && route.query.placeGroupId) {
     routeSource.value = 'local'
     routeScope.spotId = null
     routeScope.placeGroupId = Number(route.query.placeGroupId)
@@ -1406,11 +1443,11 @@ onMounted(async () => {
     if (route.query.endName) {
       routeForm.end = route.query.endName
     }
-  } else if (!appliedItineraryRoute && route.query.spotId) {
+  } else if (!appliedItineraryRoute && !appliedFoodRoute && route.query.spotId) {
     routeSource.value = amapConfig.enabled ? 'amap' : 'local'
     routeForm.end = `spot:${route.query.spotId}`
   }
-  if (!appliedItineraryRoute && route.query.end && routeSource.value === 'local') {
+  if (!appliedItineraryRoute && !appliedFoodRoute && route.query.end && routeSource.value === 'local') {
     routeForm.end = route.query.end
   }
 

@@ -13,15 +13,53 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @Service
 public class FoodService {
     private final FoodMapper foodMapper;
+    private final AiSummaryService aiSummaryService;
 
-    public FoodService(FoodMapper foodMapper) {
+    public FoodService(FoodMapper foodMapper, AiSummaryService aiSummaryService) {
         this.foodMapper = foodMapper;
+        this.aiSummaryService = aiSummaryService;
+    }
+
+    public Map<String, Object> pagedList(String cuisine, String price, String sort,
+                                         Long near, Long spotId, Long placeGroupId,
+                                         Integer page, Integer pageSize) {
+        Integer priceLevel = parseInt(price);
+        String normalizedSort = normalizeSort(sort);
+        int safePage = page == null || page <= 0 ? 1 : page;
+        int safeSize = pageSize == null || pageSize <= 0 ? 12 : Math.min(pageSize, 60);
+        int offset = (safePage - 1) * safeSize;
+
+        List<FoodVO> list = foodMapper.pagedList(
+                trimToNull(cuisine), priceLevel, normalizedSort,
+                normalizeId(near), normalizeId(spotId), normalizeId(placeGroupId),
+                offset, safeSize
+        ).stream().map(FoodService::normalizeFood).map(FoodVO::from).toList();
+
+        long total = foodMapper.pagedCount(
+                trimToNull(cuisine), priceLevel, normalizedSort,
+                normalizeId(near), normalizeId(spotId), normalizeId(placeGroupId)
+        );
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("list", list);
+        result.put("total", total);
+        result.put("page", safePage);
+        result.put("pageSize", safeSize);
+        return result;
+    }
+
+    public String getOrGenerateAiSummary(Long foodId, boolean force) {
+        if (foodMapper.exists(foodId) == 0) {
+            throw BusinessException.notFound("美食不存在");
+        }
+        return aiSummaryService.getOrGenerateForFood(foodId, force);
     }
 
     public List<FoodVO> list(String cuisine, String price, String sort, Long near, Long spotId, Long placeGroupId, Integer limit) {

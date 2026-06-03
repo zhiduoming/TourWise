@@ -105,6 +105,12 @@ const routes = [
     meta: { title: '景点详情' }
   },
   {
+    path: '/spot/:id/foods',
+    name: 'SpotFoods',
+    component: () => import('@/views/SpotFoods.vue'),
+    meta: { title: '周边美食列表' }
+  },
+  {
     path: '/food/:id',
     name: 'FoodDetail',
     component: () => import('@/views/FoodDetail.vue'),

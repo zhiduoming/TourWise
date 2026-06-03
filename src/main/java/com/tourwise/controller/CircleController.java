@@ -61,7 +61,7 @@ public class CircleController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize) {
         circleService.ensureExists(id);
-        return ApiResponse.ok(logService.list(id, null, null, null, "all", page, pageSize));
+        return ApiResponse.ok(logService.list(id, null, null, null, null, "all", page, pageSize));
     }
 
     @PostMapping("/{id}/logs")

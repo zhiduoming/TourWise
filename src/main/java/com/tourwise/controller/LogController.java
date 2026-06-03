@@ -31,11 +31,12 @@ public class LogController {
             @RequestParam(required = false) Long circleId,
             @RequestParam(required = false) Long userId,
             @RequestParam(required = false) Long spotId,
+            @RequestParam(required = false) Long foodId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false, defaultValue = "all") String tab,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize) {
-        return ApiResponse.ok(logService.list(circleId, userId, spotId, keyword, tab, page, pageSize));
+        return ApiResponse.ok(logService.list(circleId, userId, spotId, foodId, keyword, tab, page, pageSize));
     }
 
     @GetMapping("/my")

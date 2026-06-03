@@ -9,6 +9,7 @@
         f.name,
         f.image_url AS image,
         f.description,
+        f.ai_summary AS aiSummary,
         f.rating AS score,
         f.rating AS rating,
         f.price_level AS priceLevel,
@@ -19,6 +20,8 @@
         f.cuisine_name AS cuisine_type,
         CASE WHEN f.rating >= 4.5 OR f.hotness >= 500 THEN true ELSE false END AS recommend,
         f.address,
+        f.longitude,
+        f.latitude,
         DATE_FORMAT(f.open_time, '%H:%i') AS openTime,
         DATE_FORMAT(f.close_time, '%H:%i') AS closeTime,
         f.phone,
@@ -27,14 +30,7 @@
         COALESCE(s.name, p.name) AS spot_name
     </sql>
 
-    <select id="list" resultType="java.util.Map">
-        SELECT
-        <include refid="FoodListColumns"/>
-        FROM foods f
-        LEFT JOIN pois p ON p.id = f.poi_id
-        LEFT JOIN spots s ON s.id = p.spot_id
-        LEFT JOIN pois current_p ON current_p.id = #{spotId}
-        LEFT JOIN spots current_s ON current_s.id = #{spotId}
+    <sql id="FoodListFilters">
         WHERE f.status = 1
         <if test="cuisine != null">
             AND f.cuisine_code = #{cuisine}
@@ -62,6 +58,9 @@
               </trim>
             )
         </if>
+    </sql>
+
+    <sql id="FoodListOrder">
         <choose>
             <when test="sort == 'popular'">
                 ORDER BY f.hotness DESC, f.rating DESC, f.id ASC
@@ -73,7 +72,42 @@
                 ORDER BY f.rating DESC, f.hotness DESC, f.id ASC
             </otherwise>
         </choose>
+    </sql>
+
+    <select id="list" resultType="java.util.Map">
+        SELECT
+        <include refid="FoodListColumns"/>
+        FROM foods f
+        LEFT JOIN pois p ON p.id = f.poi_id
+        LEFT JOIN spots s ON s.id = p.spot_id
+        LEFT JOIN pois current_p ON current_p.id = #{spotId}
+        LEFT JOIN spots current_s ON current_s.id = #{spotId}
+        <include refid="FoodListFilters"/>
+        <include refid="FoodListOrder"/>
         LIMIT #{limit}
+    </select>
+
+    <select id="pagedList" resultType="java.util.Map">
+        SELECT
+        <include refid="FoodListColumns"/>
+        FROM foods f
+        LEFT JOIN pois p ON p.id = f.poi_id
+        LEFT JOIN spots s ON s.id = p.spot_id
+        LEFT JOIN pois current_p ON current_p.id = #{spotId}
+        LEFT JOIN spots current_s ON current_s.id = #{spotId}
+        <include refid="FoodListFilters"/>
+        <include refid="FoodListOrder"/>
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="pagedCount" resultType="long">
+        SELECT COUNT(*)
+        FROM foods f
+        LEFT JOIN pois p ON p.id = f.poi_id
+        LEFT JOIN spots s ON s.id = p.spot_id
+        LEFT JOIN pois current_p ON current_p.id = #{spotId}
+        LEFT JOIN spots current_s ON current_s.id = #{spotId}
+        <include refid="FoodListFilters"/>
     </select>
 
     <select id="detail" resultType="java.util.Map">
@@ -82,6 +116,7 @@
           f.name,
           f.image_url AS image,
           f.description,
+          f.ai_summary AS aiSummary,
           f.cuisine_code AS cuisine,
           f.cuisine_name AS cuisineName,
           f.cuisine_name AS cuisine_type,
@@ -91,6 +126,8 @@
           f.price_level AS priceLevel,
           f.avg_price AS avgPrice,
           f.address,
+          f.longitude,
+          f.latitude,
           DATE_FORMAT(f.open_time, '%H:%i') AS openTime,
           DATE_FORMAT(f.close_time, '%H:%i') AS closeTime,
           f.phone,
@@ -102,6 +139,14 @@
         WHERE f.id = #{id}
           AND f.status = 1
     </select>
+
+    <select id="findAiSummary" resultType="java.lang.String">
+        SELECT ai_summary FROM foods WHERE id = #{id} AND status = 1
+    </select>
+
+    <update id="saveAiSummary">
+        UPDATE foods SET ai_summary = #{summary} WHERE id = #{id}
+    </update>
 
     <select id="recommend" resultType="java.util.Map">
         SELECT
