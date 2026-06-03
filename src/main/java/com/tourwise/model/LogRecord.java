@@ -13,6 +13,7 @@ public class LogRecord {
     private Long id;
     private Long userId;
     private Long poiId;
+    private Long foodId;
     private Long circleId;
     private Long itineraryPlanId;
     private String title;

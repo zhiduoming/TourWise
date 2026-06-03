@@ -48,6 +48,7 @@ public class LogService {
             Long circleId,
             Long userId,
             Long spotId,
+            Long foodId,
             String keyword,
             String tab,
             int page,
@@ -62,18 +63,19 @@ public class LogService {
                 normalizeId(circleId),
                 normalizeId(userId),
                 normalizeId(spotId),
+                normalizeId(foodId),
                 normalizedKeyword,
                 trimToNull(tab),
                 offset,
                 safePageSize);
         List<LogVO> logs = attachImagesAndTags(rows).stream().map(LogVO::from).toList();
-        long total = logMapper.count(normalizeId(circleId), normalizeId(userId), normalizeId(spotId), normalizedKeyword);
+        long total = logMapper.count(normalizeId(circleId), normalizeId(userId), normalizeId(spotId), normalizeId(foodId), normalizedKeyword);
         return new PageResult<>(logs, total);
     }
 
     public PageResult<LogVO> myLogs(String keyword, String tab, int page, int pageSize) {
         long userId = AuthContext.requireUserId();
-        return list(null, userId, null, keyword, tab, page, pageSize);
+        return list(null, userId, null, null, keyword, tab, page, pageSize);
     }
 
     public PageResult<LogVO> adminLogs(
@@ -85,7 +87,7 @@ public class LogService {
             int page,
             int pageSize) {
         adminService.requireAdmin();
-        return list(circleId, userId, spotId, keyword, tab, page, pageSize);
+        return list(circleId, userId, spotId, null, keyword, tab, page, pageSize);
     }
 
     public LogVO detail(Long id) {
@@ -108,6 +110,7 @@ public class LogService {
         LogRecord record = new LogRecord();
         record.setUserId(userId);
         record.setPoiId(firstNonNull(normalizeId(request.getSpotId()), normalizeId(request.getPoiId())));
+        record.setFoodId(normalizeId(request.getFoodId()));
         record.setCircleId(normalizeId(circleId));
         record.setItineraryPlanId(normalizePlanId(request.getItineraryPlanId(), userId));
         ensureCircleWritable(record.getCircleId(), userId);

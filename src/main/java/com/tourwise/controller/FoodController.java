@@ -38,9 +38,29 @@ public class FoodController {
         return ApiResponse.ok(foodService.list(cuisine, price, sort, near, spotId, placeGroupId, limit));
     }
 
+    @GetMapping("/paged-list")
+    public ApiResponse<java.util.Map<String, Object>> pagedList(
+            @RequestParam(required = false) String cuisine,
+            @RequestParam(required = false) String price,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) Long near,
+            @RequestParam(required = false) Long spotId,
+            @RequestParam(required = false) Long placeGroupId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer pageSize) {
+        return ApiResponse.ok(foodService.pagedList(cuisine, price, sort, near, spotId, placeGroupId, page, pageSize));
+    }
+
     @GetMapping("/list/{id}")
     public ApiResponse<FoodVO> detail(@PathVariable Long id) {
         return ApiResponse.ok(foodService.detail(id));
+    }
+
+    @GetMapping("/list/{id}/ai-summary")
+    public ApiResponse<java.util.Map<String, String>> aiSummary(
+            @PathVariable Long id,
+            @RequestParam(required = false, defaultValue = "false") boolean force) {
+        return ApiResponse.ok(java.util.Map.of("summary", foodService.getOrGenerateAiSummary(id, force)));
     }
 
     @GetMapping("/recommend")

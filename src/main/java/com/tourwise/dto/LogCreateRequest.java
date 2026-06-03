@@ -24,6 +24,7 @@ public class LogCreateRequest {
 
     private Long spotId;
     private Long poiId;
+    private Long foodId;
     private Long circleId;
     private Long itineraryPlanId;
 

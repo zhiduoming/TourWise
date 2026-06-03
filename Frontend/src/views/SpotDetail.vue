@@ -303,6 +303,9 @@
             </div>
             <el-empty v-if="nearbyFoods.length === 0" description="暂无附近美食" :image-size="60" />
           </div>
+          <el-button v-if="nearbyFoods.length > 0" plain class="view-all-foods" @click="goNearbyFoodsPage">
+            查看全部美食
+          </el-button>
         </el-card>
       </el-col>
     </el-row>
@@ -828,6 +831,10 @@ const viewFoodDetail = (foodId) => {
   router.push({ path: `/food/${foodId}` })
 }
 
+const goNearbyFoodsPage = () => {
+  router.push({ path: `/spot/${route.params.id}/foods` })
+}
+
 const handleSpotImageUploaded = (imageUrl) => {
   if (imageUrl) {
     spotDetail.value.image = imageUrl
@@ -1278,6 +1285,11 @@ watch(() => route.params.id, (newId, oldId) => {
     align-items: center;
     gap: 8px;
   }
+}
+
+.view-all-foods {
+  width: 100%;
+  margin-top: 12px;
 }
 
 .food-list {

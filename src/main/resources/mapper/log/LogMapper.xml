@@ -64,6 +64,9 @@
         <if test="spotId != null">
             AND l.poi_id = #{spotId}
         </if>
+        <if test="foodId != null">
+            AND l.food_id = #{foodId}
+        </if>
         <if test="keyword != null">
             AND (l.title LIKE CONCAT('%', #{keyword}, '%')
                  OR l.content LIKE CONCAT('%', #{keyword}, '%')
@@ -101,6 +104,9 @@
         <if test="spotId != null">
             AND l.poi_id = #{spotId}
         </if>
+        <if test="foodId != null">
+            AND l.food_id = #{foodId}
+        </if>
         <if test="keyword != null">
             AND (l.title LIKE CONCAT('%', #{keyword}, '%')
                  OR l.content LIKE CONCAT('%', #{keyword}, '%')
@@ -126,12 +132,12 @@
 
     <insert id="insert" parameterType="com.tourwise.model.LogRecord" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO travel_logs (
-          user_id, poi_id, circle_id, itinerary_plan_id, title, content,
+          user_id, poi_id, food_id, circle_id, itinerary_plan_id, title, content,
           content_compressed, content_encoding, content_original_size, content_compressed_size, rating,
           scenery_rating, facility_rating, service_rating, traffic_rating, value_rating
         )
         VALUES (
-          #{userId}, #{poiId}, #{circleId}, #{itineraryPlanId}, #{title}, #{content},
+          #{userId}, #{poiId}, #{foodId}, #{circleId}, #{itineraryPlanId}, #{title}, #{content},
           #{contentCompressed}, #{contentEncoding}, #{contentOriginalSize}, #{contentCompressedSize}, #{rating},
           #{sceneryRating}, #{facilityRating}, #{serviceRating}, #{trafficRating}, #{valueRating}
         )
