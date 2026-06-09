@@ -360,6 +360,9 @@
             />
           </el-form-item>
         </template>
+        <el-form-item label="图片">
+          <LogImageUpload ref="reviewUploadRef" v-model="reviewForm.images" scene="spot-log" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="reviewDialogVisible = false">取消</el-button>
@@ -378,6 +381,7 @@ import { useUserStore } from '@/stores/user'
 import AppHeader from '@/components/AppHeader.vue'
 import AdminImageUpload from '@/components/AdminImageUpload.vue'
 import HeartIcon from '@/components/HeartIcon.vue'
+import LogImageUpload from '@/components/LogImageUpload.vue'
 import { getFacilityDetail, getSpotAiSummary } from '@/api/search'
 import { getAmapConfig } from '@/api/route'
 import AMapLoader from '@amap/amap-jsapi-loader'
@@ -442,8 +446,10 @@ const reviewForm = reactive({
   facilityRating: 5,
   serviceRating: 5,
   trafficRating: 5,
-  valueRating: 5
+  valueRating: 5,
+  images: []
 })
+const reviewUploadRef = ref(null)
 
 const isAdmin = computed(() => userStore.userInfo?.role === 'admin')
 const currentUserId = computed(() => userStore.userInfo?.id)
@@ -678,6 +684,8 @@ const resetReviewForm = () => {
   reviewForm.serviceRating = 5
   reviewForm.trafficRating = 5
   reviewForm.valueRating = 5
+  reviewForm.images = []
+  reviewUploadRef.value?.reset?.()
 }
 
 const openReviewDialog = () => {
@@ -703,7 +711,8 @@ const handleSubmitReview = async () => {
     spotId: Number(route.params.id),
     circleId: reviewForm.circleId,
     title: reviewForm.title.trim() || `${spotDetail.value.name || '景点'}游览记录`,
-    content
+    content,
+    images: reviewForm.images
   }
   if (reviewForm.withRating) {
     dimensionLabels.forEach(item => {
