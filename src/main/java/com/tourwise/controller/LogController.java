@@ -41,6 +41,14 @@ public class LogController {
         return ApiResponse.ok(logService.list(circleId, userId, spotId, foodId, keyword, tab, page, pageSize));
     }
 
+    @GetMapping("/search")
+    public ApiResponse<PageResult<LogVO>> fullTextSearch(
+            @RequestParam(name = "q", required = false) String q,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize) {
+        return ApiResponse.ok(logService.fullTextSearch(q, page, pageSize));
+    }
+
     @GetMapping("/my")
     public ApiResponse<PageResult<LogVO>> myLogs(
             @RequestParam(required = false) String keyword,

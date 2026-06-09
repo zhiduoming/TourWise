@@ -89,4 +89,10 @@ public interface LogMapper {
     int softDeleteCommentByAdmin(@Param("id") Long id);
 
     List<Map<String, Object>> listComments(@Param("logId") Long logId);
+
+    /** 倒排索引构建用：拉取所有有效日记的 id/title/content 明文。 */
+    List<Map<String, Object>> findAllForIndex();
+
+    /** 倒排索引命中后回查标题/内容/作者用，按 id 列表查询。 */
+    Map<String, Object> findIndexRow(@Param("id") Long id);
 }

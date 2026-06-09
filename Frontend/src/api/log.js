@@ -9,6 +9,15 @@ export function getLogList(params = {}) {
   })
 }
 
+// 倒排索引全文检索（对应课设要求 (4)-⑦：文本搜索算法）
+export function searchLogs(q, page = 1, pageSize = 10) {
+  return request({
+    url: '/log/search',
+    method: 'get',
+    params: { q, page, pageSize }
+  })
+}
+
 // 获取当前登录用户自己的日志
 export function getMyLogList(params = {}) {
   return request({

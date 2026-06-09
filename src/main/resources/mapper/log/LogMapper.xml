@@ -397,4 +397,16 @@
         ORDER BY COALESCE(c.parent_id, c.id), c.parent_id IS NOT NULL, c.created_at ASC, c.id ASC
     </select>
 
+    <select id="findAllForIndex" resultType="java.util.Map">
+        SELECT l.id, l.title, l.content
+        FROM travel_logs l
+        WHERE l.status = 1
+    </select>
+
+    <select id="findIndexRow" resultType="java.util.Map">
+        SELECT l.id, l.title, l.content
+        FROM travel_logs l
+        WHERE l.id = #{id}
+          AND l.status = 1
+    </select>
 </mapper>
