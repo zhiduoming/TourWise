@@ -119,6 +119,34 @@
         LIMIT 10
     </select>
 
+    <select id="hotCandidates" resultType="java.util.Map">
+        SELECT
+          COALESCE(s.representative_poi_id, s.legacy_poi_id, s.id) AS id,
+          s.id AS spotId,
+          s.legacy_place_group_id AS placeGroupId,
+          s.name,
+          c.code AS category,
+          c.name AS categoryName,
+          s.rating AS score,
+          s.rating AS rating,
+          s.hotness,
+          s.visit_count AS visits,
+          s.cover_image AS image,
+          s.description,
+          s.spot_type AS spotType,
+          s.province,
+          s.city
+        FROM spots s
+        LEFT JOIN poi_categories c ON c.id = s.category_id
+        WHERE s.status = 1
+          AND NOT (
+            s.spot_type = 'university'
+            AND s.legacy_place_group_id IS NOT NULL
+            AND s.representative_poi_id IS NULL
+            AND s.legacy_poi_id IS NULL
+          )
+    </select>
+
     <select id="list" resultType="java.util.Map">
         SELECT
           COALESCE(s.representative_poi_id, s.legacy_poi_id, s.id) AS id,

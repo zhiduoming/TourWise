@@ -30,18 +30,48 @@ public class LogService {
     private final CircleMapper circleMapper;
     private final ItineraryPlanMapper itineraryPlanMapper;
     private final NotificationService notificationService;
+    private final LogInvertedIndexService invertedIndex;
 
     public LogService(
             LogMapper logMapper,
             AdminService adminService,
             CircleMapper circleMapper,
             ItineraryPlanMapper itineraryPlanMapper,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            LogInvertedIndexService invertedIndex) {
         this.logMapper = logMapper;
         this.adminService = adminService;
         this.circleMapper = circleMapper;
         this.itineraryPlanMapper = itineraryPlanMapper;
         this.notificationService = notificationService;
+        this.invertedIndex = invertedIndex;
+    }
+
+    /**
+     * 全文检索：先走内存倒排索引取候选 logId，再按 ID 拉详情。
+     * 对应课设 (4)-⑦：用倒排索引代替 SQL LIKE。
+     */
+    public PageResult<LogVO> fullTextSearch(String keyword, int page, int pageSize) {
+        int safePage = Math.max(page, 1);
+        int safePageSize = Math.min(Math.max(pageSize, 1), 50);
+        List<Long> hits = invertedIndex.search(keyword, 500);
+        if (hits.isEmpty()) {
+            return new PageResult<>(List.of(), 0);
+        }
+        int total = hits.size();
+        int from = Math.min((safePage - 1) * safePageSize, total);
+        int to = Math.min(from + safePageSize, total);
+        List<Long> pageIds = hits.subList(from, to);
+        Long currentUserId = AuthContext.getUserId();
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Long id : pageIds) {
+            Map<String, Object> row = logMapper.findById(id, currentUserId);
+            if (row != null) {
+                rows.add(row);
+            }
+        }
+        List<LogVO> logs = attachImagesAndTags(rows).stream().map(LogVO::from).toList();
+        return new PageResult<>(logs, total);
     }
 
     public PageResult<LogVO> list(
@@ -130,6 +160,7 @@ public class LogService {
             logMapper.refreshPoiRatingFromLogs(record.getPoiId());
             logMapper.refreshSpotRatingByPoiIdFromLogs(record.getPoiId());
         }
+        invertedIndex.indexDocument(record.getId(), record.getTitle(), record.getContent());
         return ActionResultVO.created("logId", record.getId());
     }
 
@@ -156,17 +187,20 @@ public class LogService {
         if (ownerId != null && ownerId == userId) {
             logMapper.softDelete(id, userId);
             refreshRatingAfterDelete(poiId);
+            invertedIndex.removeDocument(id);
             return ActionResultVO.deleted();
         }
         if (adminService.isAdmin(userId)) {
             logMapper.softDeleteByAdmin(id);
             refreshRatingAfterDelete(poiId);
+            invertedIndex.removeDocument(id);
             return ActionResultVO.deleted();
         }
         if (logMapper.softDelete(id, userId) == 0) {
             throw BusinessException.unauthorized("只能删除自己发布的日志");
         }
         refreshRatingAfterDelete(poiId);
+        invertedIndex.removeDocument(id);
         return ActionResultVO.deleted();
     }
 
@@ -179,6 +213,7 @@ public class LogService {
         Long poiId = logMapper.findPoiId(id);
         logMapper.softDeleteByAdmin(id);
         refreshRatingAfterDelete(poiId);
+        invertedIndex.removeDocument(id);
         return ActionResultVO.deleted();
     }
 

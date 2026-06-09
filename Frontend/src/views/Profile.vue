@@ -147,6 +147,69 @@
           </div>
         </el-card>
 
+        <el-card class="fulltext-card">
+          <template #header>
+            <div class="card-header">
+              <h3 class="card-title">
+                <el-icon><Search /></el-icon>
+                日记全文检索
+                <el-tag size="small" type="info" effect="plain" style="margin-left: 8px;">倒排索引</el-tag>
+              </h3>
+              <el-button v-if="fullTextHasSearched" size="small" text @click="resetFullTextSearch">清空</el-button>
+            </div>
+          </template>
+
+          <div class="fulltext-search-row">
+            <el-input
+              v-model="fullTextKeyword"
+              placeholder="搜索全站日记（标题/正文，支持中英文混合）"
+              clearable
+              @keyup.enter="fullTextPage = 1; runFullTextSearch()"
+            >
+              <template #prefix><el-icon><Search /></el-icon></template>
+            </el-input>
+            <el-button type="primary" :loading="fullTextLoading" @click="fullTextPage = 1; runFullTextSearch()">
+              检索
+            </el-button>
+          </div>
+          <p class="fulltext-hint">
+            该入口走 Java 端 bigram 倒排索引，O(命中数) 检索，区别于 SQL LIKE 的全表扫描。
+          </p>
+
+          <div v-loading="fullTextLoading" class="fulltext-results">
+            <el-empty
+              v-if="fullTextHasSearched && fullTextResults.length === 0 && !fullTextLoading"
+              description="没有命中的日记"
+              :image-size="80"
+            />
+            <article
+              v-for="item in fullTextResults"
+              :key="`ft-${item.id}`"
+              class="fulltext-item"
+              @click="openFullTextResult(item)"
+            >
+              <div class="fulltext-main">
+                <h4>{{ item.title || '无标题日记' }}</h4>
+                <p>{{ item.content }}</p>
+                <div class="fulltext-meta">
+                  <span><el-icon><Document /></el-icon> {{ item.username || '匿名' }}</span>
+                  <span v-if="item.location"><el-icon><Location /></el-icon> {{ item.location }}</span>
+                  <span><el-icon><View /></el-icon> {{ item.viewCount || 0 }}</span>
+                </div>
+              </div>
+            </article>
+            <el-pagination
+              v-if="fullTextTotal > fullTextPageSize"
+              v-model:current-page="fullTextPage"
+              :page-size="fullTextPageSize"
+              :total="fullTextTotal"
+              layout="total, prev, pager, next"
+              @current-change="handleFullTextPageChange"
+              class="pagination"
+            />
+          </div>
+        </el-card>
+
         <el-card class="diary-card">
           <template #header>
             <div class="card-header">
@@ -493,11 +556,11 @@ import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import AppHeader from '@/components/AppHeader.vue'
 import { getProfile, updateProfile, uploadAvatar } from '@/api/profile'
-import { getMyLogList, deleteLog } from '@/api/log'
+import { getMyLogList, deleteLog, searchLogs } from '@/api/log'
 import { getSpotActionList } from '@/api/spotAction'
 import { copyItineraryPlan, getFavoriteItineraryPlans, getItineraryPlans, toggleItineraryFavorite } from '@/api/itinerary'
 import { getNotifications, getUnreadNotificationCount, markAllNotificationsRead, markNotificationRead } from '@/api/notification'
-import { Bell, Camera, Calendar, Compass, Edit, Plus, Document, Location, Star, StarFilled, View } from '@element-plus/icons-vue'
+import { Bell, Camera, Calendar, Compass, Edit, Plus, Document, Location, Search, Star, StarFilled, View } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
@@ -546,6 +609,14 @@ const favoritePlanTotal = ref(0)
 const favoritePlanPage = ref(1)
 const favoritePlanPageSize = ref(3)
 const favoritePlanActionLoading = ref('')
+const fullTextKeyword = ref('')
+const fullTextLoading = ref(false)
+const fullTextResults = ref([])
+const fullTextTotal = ref(0)
+const fullTextPage = ref(1)
+const fullTextPageSize = 5
+const fullTextHasSearched = ref(false)
+
 const notificationLoading = ref(false)
 const notifications = ref([])
 const notificationTotal = ref(0)
@@ -701,6 +772,44 @@ const loadFavoritePlans = async () => {
   } finally {
     favoritePlanLoading.value = false
   }
+}
+
+const runFullTextSearch = async () => {
+  const q = fullTextKeyword.value.trim()
+  if (!q) {
+    ElMessage.info('请输入关键词')
+    return
+  }
+  fullTextLoading.value = true
+  fullTextHasSearched.value = true
+  try {
+    const res = await searchLogs(q, fullTextPage.value, fullTextPageSize)
+    fullTextResults.value = res.data?.list || []
+    fullTextTotal.value = res.data?.total || 0
+  } catch (error) {
+    console.error('全文检索失败:', error)
+    fullTextResults.value = []
+    fullTextTotal.value = 0
+  } finally {
+    fullTextLoading.value = false
+  }
+}
+
+const handleFullTextPageChange = (page) => {
+  fullTextPage.value = page
+  runFullTextSearch()
+}
+
+const resetFullTextSearch = () => {
+  fullTextKeyword.value = ''
+  fullTextResults.value = []
+  fullTextTotal.value = 0
+  fullTextPage.value = 1
+  fullTextHasSearched.value = false
+}
+
+const openFullTextResult = (item) => {
+  router.push(`/log/${item.id}`)
 }
 
 const loadNotifications = async () => {
@@ -1133,6 +1242,75 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     gap: 14px;
+  }
+}
+
+.fulltext-card {
+  margin-bottom: 20px;
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .fulltext-search-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .fulltext-hint {
+    margin: 8px 0 12px;
+    color: #909399;
+    font-size: 12px;
+  }
+
+  .fulltext-results {
+    min-height: 40px;
+  }
+
+  .fulltext-item {
+    padding: 12px 14px;
+    border: 1px solid #ebeef5;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all .15s;
+
+    &:hover {
+      border-color: #409eff;
+      box-shadow: 0 2px 8px rgba(64, 158, 255, .12);
+    }
+
+    h4 {
+      margin: 0 0 6px;
+      font-size: 15px;
+      color: #303133;
+    }
+
+    p {
+      margin: 0 0 8px;
+      color: #606266;
+      font-size: 13px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .fulltext-meta {
+      display: flex;
+      gap: 14px;
+      color: #909399;
+      font-size: 12px;
+
+      span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+    }
   }
 }
 

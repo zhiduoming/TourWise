@@ -6,6 +6,7 @@ import com.tourwise.model.*;
 
 import com.tourwise.common.BusinessException;
 import com.tourwise.common.MapUtil;
+import com.tourwise.common.TopKSelector;
 import com.tourwise.security.AuthContext;
 import com.tourwise.vo.common.ActionResultVO;
 import com.tourwise.vo.food.FoodVO;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,11 +88,40 @@ public class FoodService {
     }
 
     public List<FoodVO> recommend() {
-        return foodMapper.recommend().stream().map(row -> {
-            Map<String, Object> item = normalizeFood(row);
-            item.put("recommendReason", "评分和人气表现较好，适合优先尝试");
-            return FoodVO.from(item);
+        // 课设要求 (5)-①：用户通常只看前 10，要求不经过完全排序排好前 10。
+        // 用大小为 K=10 的最小堆，时间 O(N log K) 远优于全排序 O(N log N)。
+        // 综合得分 = 评分 * 20 * 0.6 + 热度 * 0.4（评分 0-5 归一到 0-100）。
+        List<Map<String, Object>> candidates = foodMapper.recommendCandidates();
+        Comparator<Map<String, Object>> byScore = Comparator.comparingDouble(FoodService::compositeFoodScore);
+        TopKSelector<Map<String, Object>> selector = new TopKSelector<>(10, byScore);
+        for (Map<String, Object> row : candidates) {
+            selector.offer(normalizeFood(row));
+        }
+        return selector.toListDescending().stream().map(row -> {
+            row.put("recommendReason", "评分和人气表现较好，适合优先尝试");
+            return FoodVO.from(row);
         }).toList();
+    }
+
+    /** 美食推荐综合得分：把评分和热度按经验权重融合，便于堆排序按单一维度比较。 */
+    private static double compositeFoodScore(Map<String, Object> row) {
+        double rating = toDouble(row.get("rating"));
+        double hotness = toDouble(row.get("hotness"));
+        return rating * 20.0 * 0.6 + hotness * 0.4;
+    }
+
+    private static double toDouble(Object value) {
+        if (value instanceof Number n) {
+            return n.doubleValue();
+        }
+        if (value == null) {
+            return 0.0;
+        }
+        try {
+            return Double.parseDouble(value.toString());
+        } catch (NumberFormatException ex) {
+            return 0.0;
+        }
     }
 
     public ActionResultVO review(FoodReviewRequest request) {

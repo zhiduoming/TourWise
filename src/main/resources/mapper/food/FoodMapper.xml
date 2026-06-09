@@ -166,6 +166,23 @@
         LIMIT 10
     </select>
 
+    <!-- 返回全部候选美食（不排序、不 LIMIT），供 Java 端用 TopK 堆排序选出前 10。 -->
+    <select id="recommendCandidates" resultType="java.util.Map">
+        SELECT
+          f.id,
+          f.name,
+          f.image_url AS image,
+          f.description,
+          f.rating AS score,
+          f.rating AS rating,
+          f.hotness,
+          f.cuisine_code AS cuisine,
+          f.cuisine_name AS cuisineName,
+          f.price_level AS priceLevel
+        FROM foods f
+        WHERE f.status = 1
+    </select>
+
     <select id="exists" resultType="int">
         SELECT COUNT(*)
         FROM foods
