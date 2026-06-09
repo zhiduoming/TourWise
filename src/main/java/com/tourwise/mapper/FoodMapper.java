@@ -45,6 +45,8 @@ public interface FoodMapper {
 
     List<Map<String, Object>> recommend();
 
+    List<Map<String, Object>> recommendCandidates();
+
     int exists(@Param("id") Long id);
 
     int insertReview(FoodReviewRecord record);

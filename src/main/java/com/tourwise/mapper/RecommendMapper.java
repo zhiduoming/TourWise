@@ -13,6 +13,11 @@ import java.util.Map;
 public interface RecommendMapper {
     List<Map<String, Object>> hotTop10();
 
+    /**
+     * 返回所有候选景区/校园（不在 SQL 端排序、不 LIMIT），供 Java 端用 TopK 堆排序。
+     */
+    List<Map<String, Object>> hotCandidates();
+
     List<Map<String, Object>> list(
             @Param("userId") Long userId,
             @Param("strategy") String strategy,

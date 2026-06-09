@@ -7,12 +7,14 @@ import com.tourwise.model.*;
 import com.tourwise.common.BusinessException;
 import com.tourwise.common.MapUtil;
 import com.tourwise.common.PageResult;
+import com.tourwise.common.TopKSelector;
 import com.tourwise.security.AuthContext;
 import com.tourwise.vo.common.ActionResultVO;
 import com.tourwise.vo.recommend.RecommendVO;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,7 +31,37 @@ public class RecommendService {
     }
 
     public List<RecommendVO> hotTop10() {
-        return recommendMapper.hotTop10().stream().map(MapUtil::normalize).map(RecommendVO::from).toList();
+        // 用大小为 K=10 的最小堆从全部候选中选出 TopK，时间 O(N log K)，无需对全部数据完全排序。
+        // 综合得分 = 热度 * 0.6 + 评分 * 0.25 * 20（评分 0-5 归一到 0-100）+ 访问量 * 0.15。
+        List<Map<String, Object>> candidates = recommendMapper.hotCandidates();
+        Comparator<Map<String, Object>> byScore = Comparator.comparingDouble(RecommendService::compositeHotScore);
+        TopKSelector<Map<String, Object>> selector = new TopKSelector<>(10, byScore);
+        for (Map<String, Object> row : candidates) {
+            selector.offer(MapUtil.normalize(row));
+        }
+        return selector.toListDescending().stream().map(RecommendVO::from).toList();
+    }
+
+    /** 热度推荐综合得分：把热度、评分、访问量按经验权重融合，便于堆排序按单一维度比较。 */
+    private static double compositeHotScore(Map<String, Object> row) {
+        double hotness = toDouble(row.get("hotness"));
+        double rating = toDouble(row.get("rating"));
+        double visits = toDouble(row.get("visits"));
+        return hotness * 0.6 + rating * 20.0 * 0.25 + visits * 0.15;
+    }
+
+    private static double toDouble(Object value) {
+        if (value instanceof Number n) {
+            return n.doubleValue();
+        }
+        if (value == null) {
+            return 0.0;
+        }
+        try {
+            return Double.parseDouble(value.toString());
+        } catch (NumberFormatException ex) {
+            return 0.0;
+        }
     }
 
     public PageResult<RecommendVO> list(
