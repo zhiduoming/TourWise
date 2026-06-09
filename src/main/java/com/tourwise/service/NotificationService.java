@@ -17,6 +17,7 @@ public class NotificationService {
     public static final String TYPE_LOG_LIKE = "log_like";
     public static final String TYPE_LOG_COMMENT = "log_comment";
     public static final String TYPE_ITINERARY_COPY = "itinerary_copy";
+    public static final String TYPE_SYSTEM_WELCOME = "system_welcome";
 
     private final NotificationMapper notificationMapper;
 
@@ -58,6 +59,23 @@ public class NotificationService {
                 "itinerary",
                 planId,
                 "/itinerary?sharedPlanId=" + planId);
+    }
+
+    public void notifyWelcome(Long receiverId, String username) {
+        if (receiverId == null) {
+            return;
+        }
+        String displayName = StringUtils.hasText(username) ? username.trim() : "旅行家";
+        NotificationRecord record = new NotificationRecord();
+        record.setUserId(receiverId);
+        record.setActorUserId(null);
+        record.setType(TYPE_SYSTEM_WELCOME);
+        record.setTitle("欢迎加入 TourWise");
+        record.setContent("Hi " + displayName + "，欢迎来到 TourWise！可以先浏览热门推荐，规划一份属于你的行程。");
+        record.setTargetType("system");
+        record.setTargetId(null);
+        record.setLinkUrl("/recommend");
+        notificationMapper.insert(record);
     }
 
     public PageResult<NotificationVO> list(Boolean onlyUnread, int page, int pageSize) {

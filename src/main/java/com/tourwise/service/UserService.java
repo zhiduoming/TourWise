@@ -37,11 +37,14 @@ public class UserService {
     private final UserMapper userMapper;
     private final JwtService jwtService;
     private final OssStorageService ossStorageService;
+    private final NotificationService notificationService;
 
-    public UserService(UserMapper userMapper, JwtService jwtService, OssStorageService ossStorageService) {
+    public UserService(UserMapper userMapper, JwtService jwtService, OssStorageService ossStorageService,
+                       NotificationService notificationService) {
         this.userMapper = userMapper;
         this.jwtService = jwtService;
         this.ossStorageService = ossStorageService;
+        this.notificationService = notificationService;
     }
 
     public LoginVO login(LoginRequest request) {
@@ -73,6 +76,7 @@ public class UserService {
         account.setPasswordHash(PASSWORD_ENCODER.encode(request.getPassword()));
         userMapper.insertUser(account);
         userMapper.insertProfile(account.getId(), account.getUsername(), DEFAULT_AVATAR);
+        notificationService.notifyWelcome(account.getId(), account.getUsername());
         return new RegisterVO(account.getId(), account.getUsername());
     }
 
