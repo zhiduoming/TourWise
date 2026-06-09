@@ -21,9 +21,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/log")
 public class LogController {
     private final LogService logService;
+    private final VideoGenerationService videoGenerationService;
 
-    public LogController(LogService logService) {
+    public LogController(LogService logService, VideoGenerationService videoGenerationService) {
         this.logService = logService;
+        this.videoGenerationService = videoGenerationService;
     }
 
     @GetMapping("/list")
@@ -66,5 +68,17 @@ public class LogController {
     @PostMapping("/{id}/like")
     public ApiResponse<ActionResultVO> like(@PathVariable Long id) {
         return ApiResponse.ok(logService.toggleLike(id));
+    }
+
+    @PostMapping("/{id}/animation")
+    public ApiResponse<java.util.Map<String, Object>> submitAnimation(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "false") boolean force) {
+        return ApiResponse.ok(videoGenerationService.submit(id, force));
+    }
+
+    @GetMapping("/{id}/animation")
+    public ApiResponse<java.util.Map<String, Object>> queryAnimation(@PathVariable Long id) {
+        return ApiResponse.ok(videoGenerationService.query(id));
     }
 }

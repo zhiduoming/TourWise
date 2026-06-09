@@ -57,6 +57,66 @@
               />
             </div>
 
+            <section
+              v-if="hasPhoto && (isOwner || animationStatus === 'success')"
+              class="animation-panel"
+            >
+              <header>
+                <h3>
+                  <el-icon><MagicStick /></el-icon>
+                  AIGC 旅游动画
+                </h3>
+                <el-tag v-if="animationStatus === 'processing'" type="warning">生成中</el-tag>
+                <el-tag v-else-if="animationStatus === 'success'" type="success">已生成</el-tag>
+                <el-tag v-else-if="animationStatus === 'failed'" type="danger">生成失败</el-tag>
+                <el-tag v-else type="info">未生成</el-tag>
+              </header>
+
+              <div v-if="animationStatus === 'success' && animationUrl" class="animation-player">
+                <video
+                  :src="animationUrl"
+                  :poster="animationCover || log.images?.[0]"
+                  controls
+                  playsinline
+                  preload="metadata"
+                />
+              </div>
+
+              <div v-else-if="animationStatus === 'processing'" class="animation-hint">
+                <el-icon class="is-loading"><Refresh /></el-icon>
+                正在调用智谱 CogVideoX 生成视频，通常需要 30 秒到几分钟，离开页面也不影响生成。
+              </div>
+
+              <div v-else-if="animationStatus === 'failed'" class="animation-hint failed">
+                上次生成失败：{{ animationError || '未知原因' }}，可重试。
+              </div>
+
+              <div v-else-if="isOwner" class="animation-hint">
+                把你的日记首张照片用 AIGC 动起来，作为旅行 vlog 片段。
+              </div>
+
+              <div v-if="isOwner" class="animation-actions">
+                <el-button
+                  v-if="animationStatus !== 'success'"
+                  type="primary"
+                  :icon="MagicStick"
+                  :loading="animationSubmitting"
+                  :disabled="!canGenerateAnimation"
+                  @click="handleGenerateAnimation(false)"
+                >
+                  {{ animationStatus === 'failed' ? '重新生成' : '生成动画' }}
+                </el-button>
+                <el-button
+                  v-else
+                  :icon="Refresh"
+                  :loading="animationSubmitting"
+                  @click="handleGenerateAnimation(true)"
+                >
+                  重新生成
+                </el-button>
+              </div>
+            </section>
+
             <div
               v-if="log.itineraryPlanId"
               class="itinerary-card"
@@ -173,17 +233,25 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import HeartIcon from '@/components/HeartIcon.vue'
-import { createReport, getLogDetail, toggleLike } from '@/api/log'
+import {
+  createReport,
+  getLogDetail,
+  queryLogAnimation,
+  submitLogAnimation,
+  toggleLike
+} from '@/api/log'
 import { createComment, getComments } from '@/api/circle'
-import { ArrowLeft, ChatDotRound, Location, View, Warning } from '@element-plus/icons-vue'
+import { ArrowLeft, ChatDotRound, Location, MagicStick, Refresh, View, Warning } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 
 const defaultAvatar = 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'
 
@@ -196,6 +264,24 @@ const commentSubmitting = ref(false)
 const likeLoading = ref(false)
 const replyingTo = ref(null)
 const replyContent = ref('')
+
+const animationSubmitting = ref(false)
+const animationPolling = ref(false)
+let animationTimer = null
+
+const animationStatus = computed(() => log.value?.animationStatus ?? log.value?.animation_status ?? null)
+const animationUrl = computed(() => log.value?.animationUrl ?? log.value?.animation_url ?? '')
+const animationCover = computed(() => log.value?.animationCoverUrl ?? log.value?.animation_cover_url ?? '')
+const animationError = computed(() => log.value?.animationError ?? log.value?.animation_error ?? '')
+const ownerId = computed(() => log.value?.userId ?? log.value?.user_id ?? null)
+const isOwner = computed(() => {
+  const myId = userStore.userInfo?.id
+  return myId && ownerId.value && Number(myId) === Number(ownerId.value)
+})
+const hasPhoto = computed(() => (log.value?.images?.length || 0) > 0)
+const canGenerateAnimation = computed(() =>
+  isOwner.value && hasPhoto.value && animationStatus.value !== 'processing'
+)
 
 const isLiked = computed(() => Number(log.value?.isLiked ?? log.value?.is_liked ?? 0) === 1)
 const hasRating = computed(() => Number(log.value?.rating || 0) > 0 || dimensionRatings.value.some(item => item.value))
@@ -212,11 +298,85 @@ const loadLog = async () => {
   try {
     const res = await getLogDetail(route.params.id)
     log.value = res.data
+    if (animationStatus.value === 'processing') {
+      startAnimationPolling()
+    }
   } catch (error) {
     console.error('加载日志详情失败:', error)
     log.value = null
   } finally {
     loading.value = false
+  }
+}
+
+const applyAnimationState = (state) => {
+  if (!log.value || !state) return
+  log.value.animationStatus = state.status ?? state.animation_status
+  log.value.animation_status = log.value.animationStatus
+  if (state.animation_url !== undefined) {
+    log.value.animationUrl = state.animation_url
+    log.value.animation_url = state.animation_url
+  }
+  if (state.animation_cover_url !== undefined) {
+    log.value.animationCoverUrl = state.animation_cover_url
+    log.value.animation_cover_url = state.animation_cover_url
+  }
+  if (state.animation_error !== undefined) {
+    log.value.animationError = state.animation_error
+    log.value.animation_error = state.animation_error
+  }
+}
+
+const stopAnimationPolling = () => {
+  if (animationTimer) {
+    clearTimeout(animationTimer)
+    animationTimer = null
+  }
+  animationPolling.value = false
+}
+
+const pollAnimationOnce = async () => {
+  try {
+    const res = await queryLogAnimation(route.params.id)
+    applyAnimationState(res.data || {})
+    if (animationStatus.value === 'processing') {
+      animationTimer = setTimeout(pollAnimationOnce, 6000)
+    } else {
+      stopAnimationPolling()
+      if (animationStatus.value === 'success') {
+        ElMessage.success('AIGC 动画生成完成')
+      } else if (animationStatus.value === 'failed') {
+        ElMessage.error(`动画生成失败：${animationError.value || '未知原因'}`)
+      }
+    }
+  } catch (error) {
+    console.error('轮询动画状态失败:', error)
+    animationTimer = setTimeout(pollAnimationOnce, 10000)
+  }
+}
+
+const startAnimationPolling = () => {
+  if (animationPolling.value) return
+  animationPolling.value = true
+  animationTimer = setTimeout(pollAnimationOnce, 4000)
+}
+
+const handleGenerateAnimation = async (force = false) => {
+  if (!ensureLogin()) return
+  if (!hasPhoto.value) {
+    ElMessage.warning('请先在日记中上传至少一张照片')
+    return
+  }
+  animationSubmitting.value = true
+  try {
+    const res = await submitLogAnimation(route.params.id, force)
+    applyAnimationState({ status: 'processing', ...(res.data || {}) })
+    ElMessage.success('已提交生成任务，请稍候')
+    startAnimationPolling()
+  } catch (error) {
+    console.error('提交动画生成失败:', error)
+  } finally {
+    animationSubmitting.value = false
   }
 }
 
@@ -366,6 +526,10 @@ onMounted(async () => {
     await loadComments()
   }
 })
+
+onBeforeUnmount(() => {
+  stopAnimationPolling()
+})
 </script>
 
 <style lang="scss" scoped>
@@ -469,6 +633,55 @@ onMounted(async () => {
   height: 150px;
   border-radius: 8px;
   background: #f5f7fa;
+}
+
+.animation-panel {
+  margin-top: 22px;
+  padding: 18px;
+  border: 1px solid #e0e7ff;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f5f7ff 0%, #fdf4ff 100%);
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+
+    h3 {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+      color: #4338ca;
+      font-size: 16px;
+    }
+  }
+}
+
+.animation-player video {
+  width: 100%;
+  max-height: 420px;
+  border-radius: 8px;
+  background: #000;
+}
+
+.animation-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  color: #606266;
+  font-size: 14px;
+  line-height: 1.6;
+
+  &.failed {
+    color: #b91c1c;
+  }
+}
+
+.animation-actions {
+  margin-top: 12px;
 }
 
 .itinerary-card {

@@ -51,6 +51,23 @@ export function toggleLike(id) {
   })
 }
 
+// 提交 AIGC 旅游动画生成任务
+export function submitLogAnimation(id, force = false) {
+  return request({
+    url: `/log/${id}/animation`,
+    method: 'post',
+    params: { force }
+  })
+}
+
+// 查询 AIGC 旅游动画生成状态
+export function queryLogAnimation(id) {
+  return request({
+    url: `/log/${id}/animation`,
+    method: 'get'
+  })
+}
+
 // 举报日志或评论
 export function createReport(data) {
   return request({

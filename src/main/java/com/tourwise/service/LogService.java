@@ -441,6 +441,11 @@ public class LogService {
         alias(item, "serviceRating", "service_rating");
         alias(item, "trafficRating", "traffic_rating");
         alias(item, "valueRating", "value_rating");
+        alias(item, "animationUrl", "animation_url");
+        alias(item, "animationCoverUrl", "animation_cover_url");
+        alias(item, "animationStatus", "animation_status");
+        alias(item, "animationTaskId", "animation_task_id");
+        alias(item, "animationError", "animation_error");
         decompressContentIfPresent(item);
         return item;
     }

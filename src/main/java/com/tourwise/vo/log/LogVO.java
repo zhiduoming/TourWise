@@ -50,6 +50,11 @@ public class LogVO {
     private Integer isLiked;
     private List<String> images;
     private List<String> tags;
+    private String animationUrl;
+    private String animationCoverUrl;
+    private String animationStatus;
+    private String animationTaskId;
+    private String animationError;
 
     public static LogVO from(Map<String, Object> row) {
         LogVO vo = new LogVO();
@@ -87,8 +92,28 @@ public class LogVO {
         vo.setIsLiked(firstInt(row, "isLiked", "is_liked"));
         vo.setImages(stringList(row.get("images")));
         vo.setTags(stringList(row.get("tags")));
+        vo.setAnimationUrl(firstString(row, "animationUrl", "animation_url"));
+        vo.setAnimationCoverUrl(firstString(row, "animationCoverUrl", "animation_cover_url"));
+        vo.setAnimationStatus(firstString(row, "animationStatus", "animation_status"));
+        vo.setAnimationTaskId(firstString(row, "animationTaskId", "animation_task_id"));
+        vo.setAnimationError(firstString(row, "animationError", "animation_error"));
         return vo;
     }
+
+    @JsonProperty("animation_url")
+    public String getAnimationUrlAlias() { return animationUrl; }
+
+    @JsonProperty("animation_cover_url")
+    public String getAnimationCoverUrlAlias() { return animationCoverUrl; }
+
+    @JsonProperty("animation_status")
+    public String getAnimationStatusAlias() { return animationStatus; }
+
+    @JsonProperty("animation_task_id")
+    public String getAnimationTaskIdAlias() { return animationTaskId; }
+
+    @JsonProperty("animation_error")
+    public String getAnimationErrorAlias() { return animationError; }
 
     @JsonProperty("user_id")
     public Long getUserIdAlias() {
