@@ -7,11 +7,11 @@
       </el-button>
     </div>
     <nav class="header-nav" aria-label="主要功能导航">
-      <el-button text @click="$router.push('/search')">景点查询</el-button>
-      <el-button text @click="$router.push('/recommend')">智能推荐</el-button>
-      <el-button text @click="$router.push('/route-plan')">路线规划</el-button>
-      <el-button text @click="$router.push('/itinerary')">旅行计划</el-button>
-      <el-button text class="circle-link" @click="goToCircle">
+      <el-button text :class="{ 'nav-active': isNavActive('/search') }" @click="$router.push('/search')">景点查询</el-button>
+      <el-button text :class="{ 'nav-active': isNavActive('/recommend') }" @click="$router.push('/recommend')">智能推荐</el-button>
+      <el-button text :class="{ 'nav-active': isNavActive('/route-plan') }" @click="$router.push('/route-plan')">路线规划</el-button>
+      <el-button text :class="{ 'nav-active': isNavActive('/itinerary') }" @click="$router.push('/itinerary')">旅行计划</el-button>
+      <el-button text class="circle-link" :class="{ 'nav-active': isNavActive('/circle') }" @click="goToCircle">
         <el-icon><ChatDotRound /></el-icon>
         圈子
       </el-button>
@@ -77,14 +77,20 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { getUnreadNotificationCount } from '@/api/notification'
 import { House, User, Setting, SwitchButton, ChatDotRound, MapLocation, DataBoard, Location, Bell, Document } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
+
+const isNavActive = (prefix) => {
+  const path = route.path || ''
+  return path === prefix || path.startsWith(prefix + '/')
+}
 
 const defaultAvatar = 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'
 
@@ -202,12 +208,15 @@ const handleLogout = async () => {
   }
 
   .circle-link {
-    color: #6d28d9;
-    background: #f5f3ff;
-
     .el-icon {
       margin-right: 4px;
     }
+  }
+
+  .nav-active {
+    color: #6d28d9;
+    background: #f5f3ff;
+    font-weight: 600;
   }
 }
 
