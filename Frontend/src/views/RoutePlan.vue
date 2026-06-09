@@ -103,54 +103,93 @@
             </el-form-item>
 
             <el-form-item label="起点">
-              <el-select
-                v-model="routeForm.start"
-                placeholder="请选择起点"
-                filterable
-                clearable
-                :disabled="routeSource === 'local' ? !allPOIs.length : !routeSpots.length"
-                style="width: 100%"
-              >
-                <el-option
-                  v-if="routeSource === 'amap' && currentLocation"
-                  :label="currentLocationLabel"
-                  value="__current__"
-                />
-                <el-option
-                  v-for="item in routeStartOptions"
-                  :key="`start-${item.value}`"
-                  :label="item.label"
-                  :value="item.value"
+              <div class="endpoint-row">
+                <el-select
+                  v-model="routeForm.start"
+                  placeholder="请选择起点"
+                  filterable
+                  clearable
+                  :disabled="routeSource === 'local' ? !allPOIs.length : !routeSpots.length"
+                  style="flex: 1"
                 >
-                  <div class="poi-option">
-                    <span>{{ item.label }}</span>
-                    <el-tag v-if="item.tag" size="small">{{ item.tag }}</el-tag>
-                  </div>
-                </el-option>
-              </el-select>
+                  <el-option
+                    v-if="routeSource === 'amap' && currentLocation"
+                    :label="currentLocationLabel"
+                    value="__current__"
+                  />
+                  <el-option
+                    v-for="item in routeStartOptions"
+                    :key="`start-${item.value}`"
+                    :label="item.label"
+                    :value="item.value"
+                  >
+                    <div class="poi-option">
+                      <span>{{ item.label }}</span>
+                      <el-tag v-if="item.tag" size="small">{{ item.tag }}</el-tag>
+                    </div>
+                  </el-option>
+                </el-select>
+                <el-tooltip content="使用当前定位作为起点" placement="top">
+                  <el-button
+                    :icon="Aim"
+                    :loading="locating"
+                    :disabled="routeSource !== 'amap' || !amapConfig.enabled"
+                    @click="useCurrentAsEndpoint('start')"
+                  />
+                </el-tooltip>
+                <el-tooltip content="搜索任意地点作为起点" placement="top">
+                  <el-button
+                    :icon="Search"
+                    :disabled="routeSource !== 'amap' || !amapConfig.enabled"
+                    @click="openPoiSearch('start')"
+                  />
+                </el-tooltip>
+              </div>
             </el-form-item>
 
             <el-form-item label="终点">
-              <el-select
-                v-model="routeForm.end"
-                placeholder="请选择终点"
-                filterable
-                clearable
-                :disabled="routeSource === 'local' ? !allPOIs.length : !routeSpots.length"
-                style="width: 100%"
-              >
-                <el-option
-                  v-for="item in routeEndOptions"
-                  :key="`end-${item.value}`"
-                  :label="item.label"
-                  :value="item.value"
+              <div class="endpoint-row">
+                <el-select
+                  v-model="routeForm.end"
+                  placeholder="请选择终点"
+                  filterable
+                  clearable
+                  :disabled="routeSource === 'local' ? !allPOIs.length : !routeSpots.length"
+                  style="flex: 1"
                 >
-                  <div class="poi-option">
-                    <span>{{ item.label }}</span>
-                    <el-tag v-if="item.tag" size="small">{{ item.tag }}</el-tag>
-                  </div>
-                </el-option>
-              </el-select>
+                  <el-option
+                    v-if="routeSource === 'amap' && currentLocation"
+                    :label="currentLocationLabel"
+                    value="__current__"
+                  />
+                  <el-option
+                    v-for="item in routeEndOptions"
+                    :key="`end-${item.value}`"
+                    :label="item.label"
+                    :value="item.value"
+                  >
+                    <div class="poi-option">
+                      <span>{{ item.label }}</span>
+                      <el-tag v-if="item.tag" size="small">{{ item.tag }}</el-tag>
+                    </div>
+                  </el-option>
+                </el-select>
+                <el-tooltip content="使用当前定位作为终点" placement="top">
+                  <el-button
+                    :icon="Aim"
+                    :loading="locating"
+                    :disabled="routeSource !== 'amap' || !amapConfig.enabled"
+                    @click="useCurrentAsEndpoint('end')"
+                  />
+                </el-tooltip>
+                <el-tooltip content="搜索任意地点作为终点" placement="top">
+                  <el-button
+                    :icon="Search"
+                    :disabled="routeSource !== 'amap' || !amapConfig.enabled"
+                    @click="openPoiSearch('end')"
+                  />
+                </el-tooltip>
+              </div>
             </el-form-item>
 
             <el-form-item v-if="routeSource === 'amap'" label="途经景点">
@@ -509,6 +548,45 @@
         </template>
       </div>
     </el-drawer>
+
+    <!-- POI 关键字搜索 -->
+    <el-dialog
+      v-model="poiSearchVisible"
+      :title="poiSearchTarget === 'start' ? '搜索起点' : '搜索终点'"
+      width="520px"
+      destroy-on-close
+    >
+      <el-input
+        v-model="poiSearchKeyword"
+        placeholder="输入地点关键字，例如：王府井、清华大学、星巴克"
+        clearable
+        @keyup.enter="runPoiSearch"
+      >
+        <template #append>
+          <el-button :icon="Search" :loading="poiSearching" @click="runPoiSearch">搜索</el-button>
+        </template>
+      </el-input>
+      <div v-if="poiSearchResults.length" class="poi-result-list">
+        <div
+          v-for="poi in poiSearchResults"
+          :key="poi.id || `${poi.longitude},${poi.latitude}`"
+          class="poi-result-item"
+          @click="selectPoiSearchResult(poi)"
+        >
+          <div class="poi-result-main">
+            <strong>{{ poi.name }}</strong>
+            <span v-if="poi.address">{{ poi.address }}</span>
+          </div>
+          <el-button type="primary" plain size="small">选择</el-button>
+        </div>
+      </div>
+      <el-empty
+        v-else-if="!poiSearching && poiSearchAttempted"
+        description="没找到匹配地点，换个关键字试试"
+        :image-size="80"
+      />
+      <p v-else class="poi-search-tip">提示：可以输任意地点关键字，结果来自高德 POI 接口</p>
+    </el-dialog>
   </div>
 </template>
 
@@ -534,7 +612,7 @@ import {
   deleteRouteRecord
 } from '@/api/route'
 import { useUserStore } from '@/stores/user'
-import { Delete, Plus, Upload } from '@element-plus/icons-vue'
+import { Aim, Delete, Plus, Search, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const route = useRoute()
@@ -577,6 +655,14 @@ const amapConfig = reactive({
   securityCode: '',
   message: ''
 })
+
+// POI 关键字搜索（高德 PlaceSearch）
+const poiSearchVisible = ref(false)
+const poiSearchTarget = ref('end')
+const poiSearchKeyword = ref('')
+const poiSearching = ref(false)
+const poiSearchAttempted = ref(false)
+const poiSearchResults = ref([])
 const amapContainer = ref(null)
 const amapApi = ref(null)
 const amapInstance = ref(null)
@@ -1208,17 +1294,15 @@ const handleRouteSourceChange = async (value) => {
 }
 
 const applyFoodRouteQuery = () => {
-  const { startSpotId, endLng, endLat, endName } = route.query
-  if (!startSpotId || !endLng || !endLat) {
+  const { startSpotId, endLng, endLat, endName, endFromFood } = route.query
+  if (!endLng || !endLat) {
+    return false
+  }
+  if (!endFromFood && !startSpotId) {
     return false
   }
   if (!amapConfig.enabled) {
     ElMessage.warning('高德地图未配置，暂时无法规划到该美食店的路线')
-    return false
-  }
-  const startSpot = routeSpots.value.find(s => String(s.id) === String(startSpotId))
-  if (!startSpot || startSpot.longitude == null || startSpot.latitude == null) {
-    ElMessage.warning('未找到起点景点的坐标')
     return false
   }
   const lngNum = Number(endLng)
@@ -1232,14 +1316,23 @@ const applyFoodRouteQuery = () => {
     id: virtualId,
     name: String(endName || '美食目的地'),
     longitude: lngNum,
-    latitude: latNum
+    latitude: latNum,
+    spotType: '美食'
   })
   routeSource.value = 'amap'
-  routeForm.start = `spot:${startSpot.id}`
   routeForm.end = `spot:${virtualId}`
+  // 起点：如果带了 startSpotId 且确实能在列表中找到，就预填；找不到就留空让用户自己选/搜索/定位
+  routeForm.start = ''
+  if (startSpotId) {
+    const startSpot = routeSpots.value.find(s => String(s.id) === String(startSpotId))
+    if (startSpot?.longitude != null && startSpot?.latitude != null) {
+      routeForm.start = `spot:${startSpot.id}`
+    }
+  }
   routeForm.waypoints = []
   routeResult.value = null
   locationResolve.value = null
+  ElMessage.success(`已将「${endName || '该美食店'}」设为终点，请选择起点或使用当前定位`)
   return true
 }
 
@@ -1333,7 +1426,7 @@ const loadAmapApi = async () => {
   const AMap = await AMapLoader.load({
     key: amapConfig.jsKey,
     version: '2.0',
-    plugins: ['AMap.Scale', 'AMap.ToolBar', 'AMap.Geolocation']
+    plugins: ['AMap.Scale', 'AMap.ToolBar', 'AMap.Geolocation', 'AMap.PlaceSearch']
   })
   amapApi.value = AMap
   return AMap
@@ -1418,6 +1511,103 @@ const drawCurrentLocationMarker = () => {
   amapInstance.value.add(marker)
   amapOverlays.value.push(marker)
   amapInstance.value.setCenter([Number(currentLocation.value.longitude), Number(currentLocation.value.latitude)])
+}
+
+const openPoiSearch = (target) => {
+  if (!amapConfig.enabled) {
+    ElMessage.warning('高德地图未配置，无法搜索')
+    return
+  }
+  poiSearchTarget.value = target
+  poiSearchKeyword.value = ''
+  poiSearchResults.value = []
+  poiSearchAttempted.value = false
+  poiSearchVisible.value = true
+}
+
+const runPoiSearch = async () => {
+  const keyword = poiSearchKeyword.value.trim()
+  if (!keyword) {
+    ElMessage.warning('请输入搜索关键字')
+    return
+  }
+  poiSearching.value = true
+  poiSearchAttempted.value = true
+  try {
+    const AMap = await loadAmapApi()
+    if (!AMap.PlaceSearch) {
+      await new Promise((resolve, reject) => {
+        AMap.plugin(['AMap.PlaceSearch'], () => resolve())
+        setTimeout(() => reject(new Error('PlaceSearch 插件加载超时')), 8000)
+      })
+    }
+    const placeSearch = new AMap.PlaceSearch({
+      pageSize: 10,
+      pageIndex: 1,
+      extensions: 'base'
+    })
+    const result = await new Promise((resolve, reject) => {
+      placeSearch.search(keyword, (status, res) => {
+        if (status === 'complete' && res?.poiList?.pois) {
+          resolve(res.poiList.pois)
+        } else {
+          resolve([])
+        }
+      })
+    })
+    poiSearchResults.value = result.map(p => ({
+      id: p.id,
+      name: p.name,
+      address: p.address || p.district || '',
+      longitude: p.location?.lng ?? p.location?.getLng?.(),
+      latitude: p.location?.lat ?? p.location?.getLat?.()
+    })).filter(p => Number.isFinite(p.longitude) && Number.isFinite(p.latitude))
+  } catch (error) {
+    console.error('POI 搜索失败:', error)
+    ElMessage.error('搜索失败，请稍后重试')
+    poiSearchResults.value = []
+  } finally {
+    poiSearching.value = false
+  }
+}
+
+const selectPoiSearchResult = (poi) => {
+  // 把搜索到的 POI 作为虚拟 spot 注入，让起点/终点能用 spot:ID 引用
+  const existing = routeSpots.value.find(s => String(s.id) === String(poi.id))
+  if (!existing) {
+    routeSpots.value.push({
+      id: poi.id,
+      name: poi.name,
+      longitude: poi.longitude,
+      latitude: poi.latitude,
+      spotType: '搜索',
+      city: poi.address
+    })
+  }
+  const value = `spot:${poi.id}`
+  if (poiSearchTarget.value === 'start') {
+    routeForm.start = value
+  } else {
+    routeForm.end = value
+  }
+  poiSearchVisible.value = false
+  ElMessage.success(`已将「${poi.name}」设为${poiSearchTarget.value === 'start' ? '起点' : '终点'}`)
+}
+
+const useCurrentAsEndpoint = async (target) => {
+  if (!currentLocation.value) {
+    await handleUseCurrentLocation()
+  }
+  if (!currentLocation.value) {
+    return
+  }
+  const value = '__current__'
+  if (target === 'start') {
+    routeForm.start = value
+  } else {
+    routeForm.end = value
+  }
+  ElMessage.success(`已将当前定位设为${target === 'start' ? '起点' : '终点'}`)
 }
 
 onMounted(async () => {
@@ -1534,6 +1724,64 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.endpoint-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.poi-result-list {
+  margin-top: 14px;
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+}
+
+.poi-result-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover {
+    background: #f5f7fa;
+  }
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.poi-result-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+
+  strong {
+    color: #303133;
+  }
+
+  span {
+    color: #909399;
+    font-size: 12px;
+  }
+}
+
+.poi-search-tip {
+  margin: 16px 0 0;
+  color: #909399;
+  font-size: 13px;
+  text-align: center;
 }
 
 .route-result {

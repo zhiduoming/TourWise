@@ -37,7 +37,13 @@ request.interceptors.response.use(
   },
   error => {
     console.error('Response error:', error)
-    ElMessage.error(error.message || '网络错误')
+    const data = error.response?.data
+    const message = data?.message || error.message || '网络错误'
+    ElMessage.error(message)
+    if (error.response?.status === 401 && data?.message === '未登录或登录已过期') {
+      localStorage.removeItem('token')
+      window.location.href = '/login'
+    }
     return Promise.reject(error)
   }
 )

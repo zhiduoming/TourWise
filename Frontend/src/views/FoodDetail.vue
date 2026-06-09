@@ -133,9 +133,9 @@
         <el-empty v-if="!diaryList.length" description="还没有人写过这家店，来当第一个分享的人" />
 
         <div v-else>
-          <div class="log-item" v-for="log in diaryList" :key="log.id">
+          <div class="log-item" v-for="log in diaryList" :key="log.id" @click="goLogDetail(log.id)">
             <div class="log-header">
-              <el-avatar :size="40" :icon="User" :src="log.userAvatar" />
+              <el-avatar :size="40" :icon="User" :src="log.avatar || log.userAvatar" />
               <div class="log-author">
                 <span class="author-name">{{ log.username || log.userName || '匿名用户' }}</span>
                 <span class="log-time">{{ formatDate(log.createdAt || log.created_at) }}</span>
@@ -143,9 +143,19 @@
             </div>
             <h4 class="log-title">{{ log.title }}</h4>
             <p class="log-content">{{ truncateContent(log.content) }}</p>
+            <div v-if="log.images?.length" class="log-image-grid">
+              <el-image
+                v-for="(img, idx) in log.images.slice(0, 4)"
+                :key="`${log.id}-${idx}`"
+                :src="img"
+                class="log-thumb"
+                fit="cover"
+              />
+            </div>
             <div class="log-footer">
               <span><el-icon><Star /></el-icon> {{ log.rating || '-' }}</span>
-              <span><el-icon><View /></el-icon> {{ log.viewCount || log.hotness || 0 }}</span>
+              <span><el-icon><View /></el-icon> {{ log.viewCount || log.view_count || 0 }} 浏览</span>
+              <span class="log-detail-hint">点击查看详情/生成 AIGC 动画 →</span>
             </div>
           </div>
 
@@ -180,6 +190,9 @@
             show-word-limit
           />
         </el-form-item>
+        <el-form-item label="图片">
+          <LogImageUpload ref="logUploadRef" v-model="logForm.images" scene="food-log" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="logDialogVisible = false">取消</el-button>
@@ -195,6 +208,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import AppHeader from '@/components/AppHeader.vue'
 import AdminImageUpload from '@/components/AdminImageUpload.vue'
+import LogImageUpload from '@/components/LogImageUpload.vue'
 import { getFoodDetail, getFoodAiSummary } from '@/api/food'
 import { getLogList, createLog } from '@/api/log'
 import { getAmapConfig } from '@/api/route'
@@ -229,7 +243,8 @@ const mapHint = ref('地图加载中...')
 // Log dialog
 const logDialogVisible = ref(false)
 const logSubmitting = ref(false)
-const logForm = reactive({ title: '', content: '', rating: 5 })
+const logForm = reactive({ title: '', content: '', rating: 5, images: [] })
+const logUploadRef = ref(null)
 
 const formatDate = (dateStr) => {
   if (!dateStr) return ''
@@ -239,6 +254,10 @@ const formatDate = (dateStr) => {
 const truncateContent = (content, maxLength = 150) => {
   if (!content) return ''
   return content.length > maxLength ? content.substring(0, maxLength) + '...' : content
+}
+
+const goLogDetail = (id) => {
+  if (id) router.push(`/log/${id}`)
 }
 
 const loadFoodDetail = async () => {
@@ -279,22 +298,23 @@ const regenerateAiSummary = () => loadAiSummary(true)
 
 const canPlanRoute = computed(() => {
   const fd = foodDetail.value
-  return Boolean(fd?.longitude && fd?.latitude && fd?.spot_id)
+  return Boolean(fd?.longitude && fd?.latitude)
 })
 
 const goRoutePlan = () => {
   const fd = foodDetail.value
   if (!canPlanRoute.value) {
-    ElMessage.warning('该美食缺少坐标或未关联景点，暂无法规划路线')
+    ElMessage.warning('该美食缺少坐标，暂无法规划路线')
     return
   }
   router.push({
     path: '/route-plan',
     query: {
-      startSpotId: fd.spot_id,
       endLng: fd.longitude,
       endLat: fd.latitude,
-      endName: fd.name
+      endName: fd.name,
+      endFromFood: 1,
+      ...(fd.spot_id ? { startSpotId: fd.spot_id } : {})
     }
   })
 }
@@ -393,6 +413,8 @@ const resetLogForm = () => {
   logForm.title = ''
   logForm.content = ''
   logForm.rating = 5
+  logForm.images = []
+  logUploadRef.value?.reset?.()
 }
 
 const submitLog = async () => {
@@ -406,7 +428,8 @@ const submitLog = async () => {
       title: logForm.title.trim() || `${foodDetail.value.name} 的探店笔记`,
       content: logForm.content.trim(),
       foodId: foodDetail.value.id,
-      rating: logForm.rating
+      rating: logForm.rating,
+      images: logForm.images
     })
     ElMessage.success('日志已发布')
     logDialogVisible.value = false
@@ -587,8 +610,31 @@ onBeforeUnmount(() => {
   .log-item {
     padding: 20px;
     border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: background 0.2s;
 
+    &:hover { background: #fafbff; }
     &:last-child { border-bottom: none; }
+
+    .log-image-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin: 0 0 12px 0;
+    }
+
+    .log-thumb {
+      width: 100%;
+      height: 92px;
+      border-radius: 6px;
+      background: #f5f7fa;
+    }
+
+    .log-detail-hint {
+      margin-left: auto;
+      color: #2563eb;
+      font-size: 12px;
+    }
 
     .log-header {
       display: flex;

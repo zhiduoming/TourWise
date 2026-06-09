@@ -35,6 +35,11 @@
         l.view_count,
         l.is_top,
         l.created_at,
+        l.animation_url,
+        l.animation_cover_url,
+        l.animation_status,
+        l.animation_task_id,
+        l.animation_error,
         (SELECT COUNT(*) FROM log_likes ll WHERE ll.log_id = l.id) AS like_count,
         (SELECT COUNT(*) FROM log_comments lc WHERE lc.log_id = l.id AND lc.status = 1) AS comment_count,
         CASE WHEN my_like.user_id IS NULL THEN 0 ELSE 1 END AS is_liked
@@ -216,6 +221,57 @@
         WHERE id = #{id}
           AND status = 1
     </select>
+
+    <select id="findAnimationInfo" resultType="java.util.Map">
+        SELECT
+          l.id,
+          l.user_id,
+          l.food_id,
+          l.poi_id,
+          l.title,
+          l.content,
+          f.name AS food_name,
+          f.cuisine_name AS food_cuisine,
+          p.name AS poi_name,
+          l.animation_url,
+          l.animation_cover_url,
+          l.animation_status,
+          l.animation_task_id,
+          l.animation_error,
+          (SELECT image_url FROM log_images li WHERE li.log_id = l.id ORDER BY li.sort_order, li.id LIMIT 1) AS first_image
+        FROM travel_logs l
+        LEFT JOIN foods f ON f.id = l.food_id
+        LEFT JOIN pois p ON p.id = l.poi_id
+        WHERE l.id = #{id}
+          AND l.status = 1
+    </select>
+
+    <update id="updateAnimationSubmitted">
+        UPDATE travel_logs
+        SET animation_task_id = #{taskId},
+            animation_status = 'processing',
+            animation_error = NULL,
+            animation_updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateAnimationSuccess">
+        UPDATE travel_logs
+        SET animation_url = #{videoUrl},
+            animation_cover_url = #{coverUrl},
+            animation_status = 'success',
+            animation_error = NULL,
+            animation_updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateAnimationFailed">
+        UPDATE travel_logs
+        SET animation_status = 'failed',
+            animation_error = #{errorMessage},
+            animation_updated_at = NOW()
+        WHERE id = #{id}
+    </update>
 
     <update id="softDelete">
         UPDATE travel_logs

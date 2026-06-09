@@ -54,6 +54,14 @@ public interface LogMapper {
 
     Long findPoiId(@Param("id") Long id);
 
+    Map<String, Object> findAnimationInfo(@Param("id") Long id);
+
+    int updateAnimationSubmitted(@Param("id") Long id, @Param("taskId") String taskId);
+
+    int updateAnimationSuccess(@Param("id") Long id, @Param("videoUrl") String videoUrl, @Param("coverUrl") String coverUrl);
+
+    int updateAnimationFailed(@Param("id") Long id, @Param("errorMessage") String errorMessage);
+
     int softDelete(@Param("id") Long id, @Param("userId") Long userId);
 
     int softDeleteByAdmin(@Param("id") Long id);
