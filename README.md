@@ -1,8 +1,8 @@
 # TourWise 个性化旅游系统
 
-TourWise 是一个面向课程设计和项目实践的个性化旅游系统，核心功能包括景点查询、智能推荐、路线规划、旅行日志、圈子社区、图片上传、后台管理和日志压缩。项目后端采用 Spring Boot + MyBatis + MySQL，前端采用 Vue 3 + Vite + Element Plus。
+TourWise 是一个面向课程设计和项目实践的个性化旅游系统，核心功能包括景点查询、智能推荐、路线规划、旅行日志、美食推荐、圈子社区、图片上传、后台管理、日志压缩与全文检索。项目后端采用 Spring Boot + MyBatis + MySQL，前端采用 Vue 3 + Vite + Element Plus。
 
-本项目的重点不是只做 CRUD，路线规划使用图结构与最短路径算法，旅行日志使用 Huffman 无损压缩，推荐和查询模块也包含排序、筛选和规则评分。
+本项目的重点不是只做 CRUD，而是把数据结构与算法落到真实业务里：路线规划使用图结构与最短路径算法（Dijkstra / A* / 状压 DP）；热门与美食推荐使用 TopK 小顶堆做部分排序，无需完全排序即可选出前 10；旅行日志使用 Huffman 无损压缩存储，并自实现倒排索引做全文检索；此外接入智谱 CogVideoX 实现旅行日志的 AIGC 图生视频。
 
 ## 目录
 
@@ -34,6 +34,8 @@ TourWise 是一个面向课程设计和项目实践的个性化旅游系统，�
 - BCrypt 密码加密
 - 阿里云 OSS 图片上传
 - 高德地图 Web 服务与 JS API
+- DeepSeek Chat API（景点 / 美食 AI 简介）
+- 智谱 CogVideoX 图生视频（日志 AIGC 动画）
 - JUnit 5
 
 前端：
@@ -72,18 +74,18 @@ TourWise 是一个面向课程设计和项目实践的个性化旅游系统，�
 
 ### 智能推荐
 
-- 首页热门 Top10
-- 规则推荐列表
+- 首页热门 Top10，使用 TopK 小顶堆部分排序，不经过完全排序即可选出前 10
+- 规则推荐列表，支持热度 / 评分 / 兴趣三种策略分页
 - 优先展示已配置大量 POI 的重点景点
 - 结合热度、评分、用户偏好和行为反馈生成推荐理由
-- 支持不感兴趣、收藏、想去、去过等用户行为
+- 支持不感兴趣、收藏、想去、去过等用户行为，行为沉淀为兴趣画像权重
 
 ### 美食推荐
 
-- 美食列表和详情
-- 景点附近美食推荐
-- 美食评价
-- 根据景点关联关系返回不同美食，避免所有景点展示同一批美食
+- 美食列表与详情，支持按热度 / 评分排序、按菜系过滤、分页加载
+- 选中景点后按综合得分 TopK 推荐附近美食（小顶堆部分排序）
+- DeepSeek 自动生成的美食 AI 简介，并缓存到数据库
+- 美食评价与评分写入，根据景点关联关系返回不同美食，避免所有景点展示同一批美食
 
 ### 路线规划
 
@@ -115,6 +117,10 @@ TourWise 是一个面向课程设计和项目实践的个性化旅游系统，�
 - 日志可以选择带评分或不带评分
 - 不带评分的日志不影响景点总评分
 - 支持点赞、评论、图片、标签
+- 支持按热度与创建时间两种排序
+- 倒排索引全文检索（`/log/search`），Bigram 中文切词，零外部分词依赖
+- 正文以 Huffman 编码压缩存储
+- 接入智谱 CogVideoX，取日志首图生成 AIGC 旅游动画（异步提交 + 状态轮询）
 - 用户可以删除自己的日志
 - 管理员可以删除景点详情页和圈子中的日志
 
@@ -176,7 +182,7 @@ TourWise 是一个面向课程设计和项目实践的个性化旅游系统，�
 TourWise
 ├── Database                      # 数据库建表、种子数据、迁移脚本
 ├── Frontend                      # Vue 3 前端项目
-├── docs                          # 后端配置、接口、结构说明文档
+├── docs                          # 课程设计报告、自评表、周报等文档
 ├── logs                          # 本地运行日志
 ├── src
 │   ├── main
@@ -257,6 +263,7 @@ Database/migration_add_user_spot_actions.sql
 Database/migration_add_preference_action_sources.sql
 Database/migration_add_recommend_dislike_feedback.sql
 Database/migration_add_ai_summary.sql
+Database/migration_add_log_animation.sql
 ```
 
 更详细的数据库说明可以看：
@@ -375,11 +382,13 @@ export TOURWISE_AMAP_SECURITY_CODE=your_amap_security_code
 export TOURWISE_AMAP_WEB_KEY=your_amap_web_service_key
 ```
 
-AI 景点解读：
+AI 景点 / 美食解读（DeepSeek）：
 
 ```bash
 export TOURWISE_AI_API_KEY=your_deepseek_api_key
 ```
+
+日志 AIGC 图生视频（智谱 CogVideoX）：密钥配置项为 `tourwise.zhipu.api-key`，推荐写到下方的 `application-local.yaml`。未配置时日志正常使用，仅图生视频功能不可用。
 
 ### 本地开发推荐方式
 
@@ -402,6 +411,8 @@ tourwise:
     access-key-secret: "your_sk"
   ai:
     api-key: "your_deepseek_key"
+  zhipu:
+    api-key: "your_zhipu_key"   # 日志 AIGC 图生视频，可选
 ```
 
 `application-local.yaml` 中的值会覆盖 `application.yaml` 的同名配置，其他配置仍从 `application.yaml` 读取。
@@ -449,7 +460,7 @@ route_graph_versions
 - 使用高德地图 API。
 - 适合城市道路、跨景点导航、真实地图展示。
 
-### 2. 推荐排序：规则评分
+### 2. 推荐排序：TopK 小顶堆 + 规则评分
 
 推荐模块不是简单查表，而是把多个因素组合成排序分数：
 
@@ -460,7 +471,18 @@ route_graph_versions
 - 推荐反馈
 - 特定展示优先级
 
-排序结果用于首页 Top10 和智能推荐列表。
+排序结果用于首页 Top10 和智能推荐列表。其中首页热门 Top10 与美食 Top10 推荐使用 `TopKSelector`：
+
+- 用 `PriorityQueue` 维护一个 K=10 的小顶堆。
+- 遍历全部候选时，堆未满则入堆，堆满后只有得分高于堆顶才替换堆顶。
+- 复杂度 O(N log K)，K 固定时近似 O(N)，无需对全部数据完全排序即可得到前 10。
+- 适应数据动态变化，符合“用户通常只看前 10 个”的场景。
+
+相关代码：
+
+```text
+src/main/java/com/tourwise/common/TopKSelector.java
+```
 
 ### 3. 旅行日志压缩：Huffman 无损压缩
 
@@ -490,9 +512,42 @@ src/main/java/com/tourwise/common/HuffmanCodec.java
 src/main/java/com/tourwise/service/LogService.java
 ```
 
-说明：当前版本为了不破坏日志搜索功能，仍然保留 `content` 明文字段。因此 Huffman 在当前阶段主要体现为算法落地和压缩副本存储。后续如果要真正节省数据库整体空间，需要把搜索改成独立索引或倒排索引，再将正文主存储切换为压缩字段。
+说明：当前版本仍保留 `content` 明文字段以兼容历史数据，Huffman 体现为无损压缩副本存储，实测中文文本约可压至原文的 60%—70%。日志全文检索已独立成内存倒排索引（见下一节），不再依赖对明文字段做全表扫描。
 
-### 4. 查询与搜索
+### 4. 旅行日志全文检索：倒排索引
+
+日志全文检索由 `LogInvertedIndexService` 实现，自建内存倒排索引，零外部分词依赖（无需 IK、jieba 或 Elasticsearch）：
+
+- 构建：服务启动时全量加载日志建立 `Map<term, Set<logId>>`，并维护 `termsByLog` 反向映射；日志创建、删除时增量维护，删除时清理空 posting，避免内存泄漏。
+- 切词：中文按 Bigram（连续两字）切分，ASCII 字母 / 数字小写后形成 token。
+- 查询：把查询串同样切成 term 集合，取各 term 的 postings，按集合大小升序逐个求交，小集合提前收敛，单 term 近似 O(1) 命中，远优于全表 LIKE 扫描。
+
+相关代码与接口：
+
+```text
+src/main/java/com/tourwise/service/LogInvertedIndexService.java
+GET /api/log/search?keyword=...
+```
+
+### 5. 旅行日志 AIGC 图生视频
+
+日志详情可基于首张照片生成一段旅游动画，由 `VideoGenerationService` 调用智谱 CogVideoX 图生视频 API，采用异步模式：
+
+1. 取日志第一张照片作为首帧，标题与正文拼成提示词。
+2. 提交生成任务，拿到 taskId。
+3. 前端按 taskId 轮询任务状态。
+4. 生成成功后把视频地址与封面回写到日志记录。
+
+相关代码与接口：
+
+```text
+src/main/java/com/tourwise/service/VideoGenerationService.java
+src/main/java/com/tourwise/config/ZhipuProperties.java
+POST /api/log/{id}/animation   # 提交生成任务
+GET  /api/log/{id}/animation   # 轮询任务状态
+```
+
+### 6. 查询与搜索
 
 景点查询支持：
 
@@ -569,12 +624,27 @@ POST /api/route/location/resolve
 
 ```text
 GET    /api/log/list
+GET    /api/log/search
+GET    /api/log/my
 GET    /api/log/{id}
 POST   /api/log/create
 DELETE /api/log/{id}
 POST   /api/log/{id}/like
 GET    /api/log/{id}/comments
 POST   /api/log/{id}/comments
+POST   /api/log/{id}/animation
+GET    /api/log/{id}/animation
+```
+
+美食：
+
+```text
+GET  /api/food/list
+GET  /api/food/paged-list
+GET  /api/food/list/{id}
+GET  /api/food/list/{id}/ai-summary
+GET  /api/food/recommend
+POST /api/food/review
 ```
 
 圈子：
@@ -712,9 +782,13 @@ curl http://localhost:8080/api/route/amap/config
 9. 使用景点内部路线，展示平面图、本地 POI、路网和最短路径。
 10. 进入后台路线编辑器，展示管理员如何标注路口、路线和补充 POI。
 11. 说明日志正文使用 Huffman 进行无损压缩。
+12. 使用日志全文检索，展示倒排索引按关键词命中。
+13. 对一条带图日志触发 AIGC 图生视频，展示生成动画。
 
 答辩时可以重点讲：
 
+- 热门 / 美食 Top10 为什么用小顶堆部分排序，而不是先全排再取前 10。
+- 日志全文检索为什么用自建倒排索引，而不是全表 LIKE 或外部分词器。
 - 为什么把景点和内部 POI 分开。
 - 为什么景点之间使用高德，景点内部使用本地路网。
 - Dijkstra 和 A* 的区别。
@@ -759,8 +833,9 @@ src/main/java/com/tourwise/config/AiProperties.java
    - 浏览器定位精度低时，系统会提示手动确认。
 
 3. Huffman 当前保留明文字段。
-   - 这是为了兼容日志搜索。
-   - 如果要真正减少数据库总空间，需要重构搜索存储方案。
+   - 全文检索已由内存倒排索引承担，不再依赖明文做全表扫描。
+   - 明文字段保留主要用于历史数据兼容；若要进一步压缩数据库总空间，可将正文主存储切换为压缩字段。
+   - 倒排索引为内存结构，服务重启时全量重建，超大数据量下需评估加载耗时与内存占用。
 
 4. 后台管理仍可继续增强。
    - 用户管理、角色权限、审核流、操作日志等还可以继续完善。
